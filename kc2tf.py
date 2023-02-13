@@ -2,7 +2,8 @@ import base64
 import json
 import time
 import requests
-
+import hcl2
+import sys
 
 def process_realm_roles():
     f = open('realm_dump.json')
@@ -88,7 +89,7 @@ def process_client_roles():
 
 def handle_subgroups(group, f_out):
     for subgroup in group['subGroups']:
-        f_out.write('resource "keycloak_group" "' + subgroup['name'].lower().replace(' ', '_') + '" {')
+        f_out.write('resource "keycloak_group" "' + group['name'].lower().replace(' ', '_') + '_' + subgroup['name'].lower().replace(' ', '_') + '" {')
         f_out.write('\n\trealm_id = data.keycloak_realm.bcregistry_realm.id')
         f_out.write('\n\tname = "' + subgroup['name'] + '"')
         f_out.write('\n\tparent_id = keycloak_group.' + group['name'].lower().replace(' ', '_') + '.id')
@@ -104,7 +105,7 @@ def process_groups():
     with open('groups.tf', "w") as f_out:
         for group in data['groups']:
             if group['name'] not in default_groups:
-                f_out.write('resource "keycloak_group" "' + group['name'].lower().replace(' ', '_') + '" {')
+                f_out.write('resource "keycloak_group" "' + group['path'][1:].lower().replace(' ', '_').replace('/', '_') + '" {')
                 f_out.write('\n\trealm_id = data.keycloak_realm.bcregistry_realm.id')
                 f_out.write('\n\tname = "' + group['name'] + '"')
                 f_out.write('\n}\n')
@@ -117,9 +118,9 @@ def process_group_roles():
     with open('group_roles.tf', "w") as f_out:
         for group in data['groups']:
             if len(group['realmRoles']) > 0:
-                f_out.write('resource "keycloak_group_roles" "group_roles_' + group['name'].lower().replace(' ', '_') + '" {')
+                f_out.write('resource "keycloak_group_roles" "group_roles_' + group['path'][1:].lower().replace(' ', '_').replace('/', '_') + '" {')
                 f_out.write('\n\trealm_id = data.keycloak_realm.bcregistry_realm.id')
-                f_out.write('\n\tgroup_id = keycloak_group.' + group['name'].lower().replace(' ', '_') + '.id')
+                f_out.write('\n\tgroup_id = keycloak_group.' + group['path'][1:].lower().replace(' ', '_').replace('/', '_') + '.id')
                 f_out.write('\n\trole_ids = [')
                 for role in group['realmRoles']:
                     f_out.write('\n\t\t\tkeycloak_role.' + role.lower().replace(' ', '_') + '.id,')
@@ -131,9 +132,9 @@ def process_group_roles():
 def handle_subgroup_roles(group, f_out):
     for subgroup in group['subGroups']:
         if len(subgroup['realmRoles']) > 0:
-            f_out.write('resource "keycloak_group_roles" "group_roles_' + subgroup['name'].lower().replace(' ', '_') + '" {')
+            f_out.write('resource "keycloak_group_roles" "group_roles_' + subgroup['path'][1:].lower().replace(' ', '_').replace('/', '_') + '" {')
             f_out.write('\n\trealm_id = data.keycloak_realm.bcregistry_realm.id')
-            f_out.write('\n\tgroup_id = keycloak_group.' + subgroup['name'].lower().replace(' ', '_') + '.id')
+            f_out.write('\n\tgroup_id = keycloak_group.' + subgroup['path'][1:].lower().replace(' ', '_').replace('/', '_') + '.id')
             f_out.write('\n\trole_ids = [')
             for role in subgroup['realmRoles']:
                 f_out.write('\n\t\t\tkeycloak_role.' + role.lower().replace(' ', '_') + '.id,')
@@ -160,7 +161,7 @@ def process_clients_to_variable():
                 f_out.write('\n\t}\n')
     with open('client_secrets.tfvars', "w") as f_out:
         for client in data['clients']:
-            if client['clientId'] not in default_accounts:
+            if client['clientId'] not in default_accounts and 'secret' in client:
                 f_out.write(client['clientId'].lower().replace(' ', '_') + '_client = {')
                 f_out.write('\n\t\tid     = "' + client['clientId'] + '"')
                 f_out.write('\n\t\tsecret = "' + client['secret'] + '"')
@@ -240,7 +241,7 @@ def process_default_clients():
     data = json.loads(f.read())
     with open('default_clients.tf', "w") as f_out:
         for client in data['clients']:
-            if client['clientId'] in default_accounts:
+            if client['clientId'] in default_accounts and terraform_account not in client['clientId']:
                 f_out.write('data "keycloak_openid_client" "' + client['clientId'].lower().replace(' ', '_') + '" {')
                 f_out.write('\n\trealm_id = data.keycloak_realm.bcregistry_realm.id')
                 f_out.write('\n\tclient_id = "' + client['clientId'] + '"')
@@ -271,15 +272,16 @@ def process_scope_mappings():
     with open('scope_role_mappers.tf', "w") as f_out:
         for mapper in data['scopeMappings']:
             for role in mapper['roles']:
-                f_out.write('resource "keycloak_generic_role_mapper" "' + mapper['clientScope'] + '_' + role + '_mapper" {')
-                f_out.write('\n\trealm_id = data.keycloak_realm.bcregistry_realm.id')
-                if mapper['clientScope'] in default_scopes:
-                    f_out.write('\n\tclient_scope_id = data.keycloak_openid_client_scope.default_scope_' + mapper['clientScope'] + '.id')
-                    f_out.write('\n\trole_id = data.keycloak_role.realm_role_' + role + '.id')
-                else:
-                    f_out.write('\n\tclient_scope_id = keycloak_openid_client_scope.' + mapper['clientScope'] + '.id')
-                    f_out.write('\n\trole_id = keycloak_role.' + role + '.id')
-                f_out.write('\n\t}\n')
+                if 'clientScope' in mapper:
+                    f_out.write('resource "keycloak_generic_role_mapper" "' + mapper['clientScope'] + '_' + role + '_mapper" {')
+                    f_out.write('\n\trealm_id = data.keycloak_realm.bcregistry_realm.id')
+                    if mapper['clientScope'] in default_scopes:
+                        f_out.write('\n\tclient_scope_id = data.keycloak_openid_client_scope.default_scope_' + mapper['clientScope'] + '.id')
+                        f_out.write('\n\trole_id = data.keycloak_role.realm_role_' + role + '.id')
+                    else:
+                        f_out.write('\n\tclient_scope_id = keycloak_openid_client_scope.' + mapper['clientScope'] + '.id')
+                        f_out.write('\n\trole_id = keycloak_role.' + role + '.id')
+                    f_out.write('\n\t}\n')
 
 
 def process_service_account_roles():
@@ -288,28 +290,29 @@ def process_service_account_roles():
     data = json.loads(f.read())
     with open('service_accounts.tf', "w") as f_out:
         for user in data['users']:
-            if user['username'].startswith(name_prefix):
-                if 'clientRoles' in user or 'realmRoles' in user:
-                    client_name = user['serviceAccountClientId']
-                    client_list.append(client_name)
-                if 'realmRoles' in user:
-                    for role in user['realmRoles']:
-                        if role not in default_roles:
-                            f_out.write('resource "keycloak_openid_client_service_account_realm_role" "realm_role_' + user['username'] + '_' + role.lower().replace(' ', '_') + '" {')
-                            f_out.write('\n\t\trealm_id = data.keycloak_realm.bcregistry_realm.id')
-                            f_out.write('\n\t\trole = keycloak_role.' + role + '.name')
-                            f_out.write('\n\t\tservice_account_user_id  = keycloak_openid_client.' + client_name.lower() + '.service_account_user_id')
-                            f_out.write('\n\t}\n')
-                if 'clientRoles' in user:
-                    for client in user['clientRoles']:
-                        for role in user['clientRoles'][client]:
-                            if client_name.lower() not in default_accounts:
-                                f_out.write('resource "keycloak_openid_client_service_account_role" "client_role_' + user['username'] + '_' + role.lower().replace(' ', '_') + '" {')
-                                f_out.write('\n\t\tclient_id = data.keycloak_openid_client.' + client + '.id')
-                                f_out.write('\n\t\trole = data.keycloak_role.' + role + '.name')
-                                f_out.write('\n\t\tservice_account_user_id  = keycloak_openid_client.' + client_name.lower() + '.service_account_user_id')
+            if terraform_account not in user['username']:
+                if user['username'].startswith(name_prefix):
+                    if 'clientRoles' in user or 'realmRoles' in user:
+                        client_name = user['serviceAccountClientId']
+                        client_list.append(client_name)
+                    if 'realmRoles' in user:
+                        for role in user['realmRoles']:
+                            if role not in default_roles:
+                                f_out.write('resource "keycloak_openid_client_service_account_realm_role" "realm_role_' + user['username'] + '_' + role.lower().replace(' ', '_') + '" {')
                                 f_out.write('\n\t\trealm_id = data.keycloak_realm.bcregistry_realm.id')
+                                f_out.write('\n\t\trole = keycloak_role.' + role + '.name')
+                                f_out.write('\n\t\tservice_account_user_id  = keycloak_openid_client.' + client_name.lower() + '.service_account_user_id')
                                 f_out.write('\n\t}\n')
+                    if 'clientRoles' in user:
+                        for client in user['clientRoles']:
+                            for role in user['clientRoles'][client]:
+                                if client_name.lower() not in default_accounts:
+                                    f_out.write('resource "keycloak_openid_client_service_account_role" "client_role_' + user['username'] + '_' + role.lower().replace(' ', '_') + '" {')
+                                    f_out.write('\n\t\tclient_id = data.keycloak_openid_client.' + client + '.id')
+                                    f_out.write('\n\t\trole = data.keycloak_role.' + role + '.name')
+                                    f_out.write('\n\t\tservice_account_user_id  = keycloak_openid_client.' + client_name.lower() + '.service_account_user_id')
+                                    f_out.write('\n\t\trealm_id = data.keycloak_realm.bcregistry_realm.id')
+                                    f_out.write('\n\t}\n')
 
 
 def get_client_secret(base_url2, headers, client):
@@ -404,22 +407,51 @@ def save_managed_users_to_file(users, groups):
             f_out.write('\n\t}\n')
 
 
-def process_all_users_in_group(base_url2, headers, group, groups):
+def save_sa_memberships_to_file(users, memberships):
+    usernames = []
     name_prefix = 'service-account-'
+    with open('users.tf', 'w') as f_out:
+        for user2 in users:
+            if name_prefix in user2['username'] and user2['serviceAccountClientId'] not in default_accounts:
+                usernames.append(user2['username'])
+                f_out.write('data "keycloak_openid_client_service_account_user" "' + user2['username'].replace('@', '_').replace('\\', '_').replace('.', '_').replace('/', '_') + '" {')
+                f_out.write('\n\t\trealm_id = data.keycloak_realm.bcregistry_realm.id')
+                f_out.write('\n\t\tclient_id = keycloak_openid_client.' + user2['serviceAccountClientId'].lower() + '.id')
+                f_out.write('\n\t}\n')
+    with open('memberships.tf', 'w') as f_out:
+        for group in memberships:
+            skip = True
+            for user3 in memberships[group]:
+                if user3['username'] in usernames:
+                    skip = False
+                    break
+            if not skip:
+                f_out.write('resource "keycloak_group_memberships" "' + group[1:].replace(' ', '_').replace('/', '_').lower() + '_group_members" {')
+                f_out.write('\n\t\trealm_id = data.keycloak_realm.bcregistry_realm.id')
+                f_out.write('\n\t\tgroup_id = keycloak_group.' + group[1:].replace(' ', '_').replace('/', '_').lower() + '.id')
+                f_out.write('\n\t\t members  = [')
+                for user3 in memberships[group]:
+                    if user3['username'] in usernames:
+                        f_out.write('\n\t\t\tdata.keycloak_openid_client_service_account_user.' + user3['username'].replace('@', '_').replace('\\', '_').replace('.', '_').replace('/', '_') + '.username,')
+                f_out.write('\n\t\t]')
+                f_out.write('\n\t}\n')
+
+
+def process_all_users_in_group(base_url2, headers, group, groups, memberships):
     url = base_url2 + f'/groups/{group["id"]}/members?max=1000000'
     response = requests.request("GET", url, headers=headers)
+    memberships[group['path']] = response.json()
     for member in response.json():
-        if not member['username'].startswith(name_prefix):
-            try:
-                if member['username'] not in groups:
-                    groups[member['username']] = [group['path']]
-                else:
-                    groups[member['username']].append(group['path'])
-            except AttributeError:
-                print(member)
+        try:
+            if member['username'] not in groups:
+                groups[member['username']] = [group['path']]
+            else:
+                groups[member['username']].append(group['path'])
+        except AttributeError:
+            print(member)
     if group['subGroups']:
         for children in group['subGroups']:
-            process_all_users_in_group(base_url2, headers, children, groups)
+            process_all_users_in_group(base_url2, headers, children, groups, memberships)
 
 
 def export_data(client, token, base_url, realm):
@@ -445,7 +477,6 @@ def export_data(client, token, base_url, realm):
 
     base_url2 = base_url + "/auth/admin/realms/" + realm
 
-    # EXPORT DB
     url = base_url2 + "/partial-export?exportClients=true&exportGroupsAndRoles=true"
     response = requests.request("POST", url, headers=headers)
     print(response.status_code)
@@ -455,7 +486,6 @@ def export_data(client, token, base_url, realm):
     stop = time.time()
     print(stop-start)
 
-    # PULL CLIENT SECRETS
     for client in response_json['clients']:
         url = base_url2 + "/clients/" + client['id'] + "/client-secret"
         client_secret = requests.request("GET", url, headers=headers)
@@ -472,44 +502,14 @@ def export_data(client, token, base_url, realm):
 
     dump_json = response.json()
 
-    ix = 0
-    max_val = 10000
-    users_json = []
-
-    print("processing users...")
-    while True:
-        url = base_url2 + "/users?first=" + str(ix*max_val) + "&max=" + str(max_val)
-        user_resp = requests.request("GET", url, headers=headers)
-        if user_resp.status_code == 200:
-            ix += 1
-            res_json = user_resp.json()
-            if len(res_json) == 0:
-                break
-            else:
-                users_json.extend(res_json)
-                print(ix*max_val)
-
-    print('number of users before get users api call:')
-    print(len(response_json['users']))
-
-    response_json['users'].extend(users_json)
-    print('number of users after get users api call:')
-    print(len(response_json['users']))
-
     user_groups = {}
+    memberships = {}
     for group in dump_json:
-        process_all_users_in_group(base_url2, headers, group, user_groups)
+        process_all_users_in_group(base_url2, headers, group, user_groups, memberships)
 
-    print("processed group memberships")
-    stop = time.time()
-    print(stop - start)
+    save_sa_memberships_to_file(response_json['users'], memberships)
 
-    for user in response_json['users']:
-        if user['username'] in user_groups:
-            user['groups'] = user_groups[user['username']]
-    print("processed user roles")
-    stop = time.time()
-    print(stop - start)
+    print("processed service account group memberships")
 
     with open('realm_dump.json', 'w') as f:
         json.dump(response_json, f, ensure_ascii=False, indent=4)
@@ -606,7 +606,25 @@ def process_scope_mappers():
                     f_out.write('\n}\n')
 
 
-def main(client, client_creds, kc_url, realm):
+def create_terraform_cloud_vars(workspace_id, auth_str):
+    with open('client_secrets.tfvars', 'r') as fp:
+        data = hcl2.load(fp)
+        headers = {
+            'Content-Type': 'application/vnd.api+json',
+            'Authorization': f'Bearer {auth_str}'
+        }
+        for key, value in data.items():
+            payload = {'data': { 'type': 'vars', 'attributes': {'hcl': True, 'sensitive': True, 'category': 'terraform'}, 'relationships': {'workspace': {'data': {'type': 'workspace'}}}}}
+            payload['data']['relationships']['workspace']['data']['id'] = workspace_id
+            payload['data']['attributes']['key'] = key
+            payload['data']['attributes']['value'] = json.dumps(value)
+
+            url = "https://app.terraform.io/api/v2/vars"
+            data = json.dumps(payload)
+            response = requests.request("POST", url, headers=headers, data=data)
+
+
+def main(client, client_creds, kc_url, realm, workspace_id, auth_str):
     # export realm contents to a .json file
     export_data(client, client_creds, kc_url, realm)
     # create terraform config files that need from the exported realm's .json
@@ -625,23 +643,23 @@ def main(client, client_creds, kc_url, realm):
     process_scope_mappings()
     process_client_scopes()
     process_client_mappers()
-
+    create_terraform_cloud_vars(workspace_id, auth_str)
 
 if __name__ == '__main__':
-
     flow_id_alias = {}
+    terraform_account = 'terraform'
     default_accounts = ['account', 'account-console', 'admin-cli', 'broker', 'realm-admin-cli', 'realm-management',
-                        'realm-viewer-cli', 'security-admin-console']
+                        'realm-viewer-cli', 'security-admin-console', terraform_account]
     default_groups = ['Realm Administrator']
     default_roles = ['offline_access', 'uma_authorization']
     default_scopes = ['acr', 'web-origins', 'profile', 'roles', 'role_list', 'email', 'address', 'phone',
                       'offline_access', 'microprofile-jwt']
 
     default_mapper_names = ['Client ID', 'Client IP Address', 'Client Host']
-    mapper_client_exceptions = ['Namex-Dev', '', 'namex-solr-admin-app']
     default_flows = ['browser', 'direct grant', 'registration', 'reset credentials', 'clients', 'first broker login',
                      'docker auth', 'http challenge', 'saml ecp', 'registration form', 'forms',
                      'Handle Existing Account', 'Verify Existing Account by Re-authentication',
                      'Verify Existing Account by Re-authentication - auth-otp-form - Conditional']
     extra_scopes = ['namex-scope', 'argocd-groups'] # for now manually create these
     client_list = []
+    globals()[sys.argv[1]](sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6], sys.argv[7])
