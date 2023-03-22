@@ -654,7 +654,7 @@ def main(client, client_creds, kc_url, realm, workspace_id, auth_str):
     process_client_scopes()
     process_client_mappers()
 
-    move_tf_configs_to_repo_dir('/Users/abolyach/bc_reg/keycloak-tf/Terraform')
+    move_tf_configs_to_repo_dir('./Terraform')
     create_terraform_cloud_vars(workspace_id, auth_str)
 
 if __name__ == '__main__':
