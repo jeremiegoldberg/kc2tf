@@ -14,6 +14,7 @@ def process_realm_roles():
     with open('roles.tf', "w") as f_out:
         for role in data['roles']['realm']:
             if role['name'] not in default_roles:
+                rsc_id_map[role['name']] = role['id']
                 f_out.write('resource "keycloak_role" "' + role['name'] + '" {')
                 f_out.write('\n\trealm_id = data.keycloak_realm.bcregistry_realm.id')
                 f_out.write('\n\tname = "' + role['name'] + '"')
@@ -105,6 +106,7 @@ def process_groups():
     with open('groups.tf', "w") as f_out:
         for group in data['groups']:
             if group['name'] not in default_groups:
+                rsc_id_map[group['name']] = group['id']
                 f_out.write('resource "keycloak_group" "' + group['path'][1:].lower().replace(' ', '_').replace('/', '_') + '" {')
                 f_out.write('\n\trealm_id = data.keycloak_realm.bcregistry_realm.id')
                 f_out.write('\n\tname = "' + group['name'] + '"')
@@ -631,6 +633,8 @@ def create_terraform_cloud_vars(workspace_id, auth_str):
             print(response.json())
 
 def move_tf_configs_to_repo_dir(dst):
+    with open('rsc_id_map.json', 'w') as f:
+        json.dump(rsc_id_map, f, ensure_ascii=False, indent=4)
     src = os.fsencode('.')
     for file in os.listdir(src):
         filename = os.fsdecode(file)
@@ -641,7 +645,7 @@ def main(client, client_creds, kc_url, realm, workspace_id, auth_str):
     export_data(client, client_creds, kc_url, realm)
     process_realm_roles()
     process_groups()
-    process_authentications()
+    # process_authentications()
     process_scope_mappers()
     process_group_roles()
     process_clients_to_variable()
@@ -673,9 +677,12 @@ if __name__ == '__main__':
 
     default_mapper_names = ['Client ID', 'Client IP Address', 'Client Host']
     default_flows = ['browser', 'direct grant', 'registration', 'reset credentials', 'clients', 'first broker login',
-                     'docker auth', 'http challenge', 'saml ecp', 'registration form', 'forms',
-                     'Handle Existing Account', 'Verify Existing Account by Re-authentication',
+                     'docker auth', 'http challenge', 'saml ecp', 'registration form', 'forms', 'Account verification options',
+                     'User creation or linking', 'Reset - Conditional OTP', 'First broker login - Conditional OTP',
+                     'Browser - Conditional OTP', 'Account Verification Options', 'Direct Grant - Conditional OTP',
+                     'Handle Existing Account', 'Verify Existing Account by Re-authentication', 'Authentication Options',
                      'Verify Existing Account by Re-authentication - auth-otp-form - Conditional']
     extra_scopes = ['namex-scope', 'argocd-groups', 'service-accounts-scope'] # for now manually create these
+    rsc_id_map = {}
     client_list = []
     globals()[sys.argv[1]](sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6], sys.argv[7])
