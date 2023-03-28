@@ -1,7 +1,7 @@
 import requests
 import json
 import sys
-
+import subprocess
 
 def pull_terraform_plan_json(auth_str, run_url):
     headers = {
@@ -32,18 +32,17 @@ def main(tf_plan_output, rsc_ids, tf_key):
     run_url = "https://app.terraform.io/api/v2/runs/" + run_id
     j_plan_out = pull_terraform_plan_json(tf_key, run_url)
 
-    with open('tf_import_list.txt', 'w') as f:
-        json_file = open(rsc_ids)
-        json_str = json_file.read()
-        rsc_id_map = json.loads(json_str)
-        for val in j_plan_out['resource_changes']:
-            if 'change' in val:
-                if 'create' in val['change']['actions']:
-                    rsc_name = val['name']
-                    rsc_tp = val['type']
-                    if rsc_name in rsc_id_map:
-                        rsc_id = rsc_id_map[rsc_name]
-                        f.write(rsc_tp + '.' + rsc_name + ' ' + rsc_id + '\n')
+    json_file = open(rsc_ids)
+    json_str = json_file.read()
+    rsc_id_map = json.loads(json_str)
+    for val in j_plan_out['resource_changes']:
+        if 'change' in val:
+            if 'create' in val['change']['actions']:
+                rsc_name = val['name']
+                rsc_tp = val['type']
+                if rsc_name in rsc_id_map:
+                    rsc_id = rsc_id_map[rsc_name]
+                    subprocess.run(['terraform', 'import', rsc_tp + '.' + rsc_name, rsc_id], cwd='./Terraform')
 
 
 if __name__ == '__main__':
