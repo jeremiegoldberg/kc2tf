@@ -42,8 +42,8 @@ def main(tf_plan_output, rsc_ids, tf_key):
                 rsc_tp = val['type']
                 if rsc_name in rsc_id_map:
                     rsc_id = rsc_id_map[rsc_name]
-                    subprocess.run(['terraform', 'import', rsc_tp + '.' + rsc_name, rsc_id], cwd='./Terraform')
+                    subprocess.run(['terraform', 'import', rsc_tp + '.' + rsc_name, rsc_id], cwd='../Terraform')
 
 
 if __name__ == '__main__':
-    globals()[sys.argv[1]](sys.argv[2], sys.argv[3])
+    globals()[sys.argv[1]](sys.argv[2], sys.argv[3], sys.argv[4])
