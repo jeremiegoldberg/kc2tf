@@ -3,34 +3,32 @@ import json
 import sys
 import subprocess
 
-def pull_terraform_plan_json(auth_str, run_url):
+
+def main(tf_plan, rsc_ids, tf_key):
+    run_base_url = 'https://app.'
+    run_url = ''
+    with open(tf_plan) as tf_plan_notices:
+        for line in tf_plan_notices:
+            if run_base_url in line:
+                run_id = line.split('[0m', 1)[0]
+                run_id = run_id.split('[0m', 1)[0]
+                run_id = run_id.rsplit('/', 1)[-1]
+                run_url = "https://app.terraform.io/api/v2/runs/" + run_id
+                if len(run_id) > 0:
+                    break
     headers = {
         'Content-Type': 'application/vnd.api+json',
-        'Authorization': f'Bearer {auth_str}'
+        'Authorization': f'Bearer {tf_key}'
     }
-
     response = requests.request("GET", run_url, headers=headers)
-
+    print(response.status_code)
     j_data = json.loads(response.text)
     j_plan = j_data['data']['relationships']['plan']
     plan_id = j_plan['data']['id']
 
     plan_url = 'https://app.terraform.io/api/v2/plans/' + plan_id + '/json-output'
     response = requests.request("GET", plan_url, headers=headers)
-    return json.loads(response.text)
-
-
-def main(tf_plan_output, rsc_ids, tf_key):
-    run_base_url = 'https://app.terraform.io/app/'
-    run_id = ''
-    with open(tf_plan_output) as tf_plan_notices:
-        while not run_id:
-            for line in tf_plan_notices:
-                if run_base_url in line:
-                    run_id = line.split('[0m', 1)[0].rsplit('/', 1)[-1]
-
-    run_url = "https://app.terraform.io/api/v2/runs/" + run_id
-    j_plan_out = pull_terraform_plan_json(tf_key, run_url)
+    j_plan_out = json.loads(response.text)
 
     json_file = open(rsc_ids)
     json_str = json_file.read()
@@ -40,9 +38,10 @@ def main(tf_plan_output, rsc_ids, tf_key):
             if 'create' in val['change']['actions']:
                 rsc_name = val['name']
                 rsc_tp = val['type']
-                if rsc_name in rsc_id_map:
-                    rsc_id = rsc_id_map[rsc_name]
-                    subprocess.run(['terraform', 'import', rsc_tp + '.' + rsc_name, rsc_id], cwd='../Terraform')
+                kc_rsc_name = val['change']['after']['name']
+                if kc_rsc_name in rsc_id_map:
+                    rsc_id = rsc_id_map[kc_rsc_name]
+                    subprocess.run(['terraform', 'import', rsc_tp + '.' + rsc_name, 'bcregistry/' + rsc_id], cwd='../Terraform')
 
 
 if __name__ == '__main__':
