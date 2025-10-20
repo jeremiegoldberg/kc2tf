@@ -1,14 +1,32 @@
-## Service Account
+## Prérequis
 
-Import terraform.json via admin console to generate a service account.
-- Generate credentials and assign realm-admin role
+- Python 3.x
+- Dépendances Python:
+  ```bash
+  pip install requests
+  ```
+  
+Un compte Keycloak avec des droits suffisants sur le realm ciblé (souvent un compte administrateur de realm).
 
-## Generate Terraform configs
+## Générer les configurations Terraform
 
-Run kc2tf.py script to export Keycloak objects into terraform configs.
-Generated configs may need minor human intervention, i.e. renaming duplicate resource, fixing constraint violations.
-Take a look at the .tf files in the repo to see which files still need to be added manually (e.g. IDP providers)
-The script will export client secrets into a separate file, however IDP secrets need to be supplied manually.
+Exécutez le script pour exporter les objets Keycloak vers des fichiers Terraform.
+
+Commande générale:
+```bash
+python /home/git/external/kc2tf/bcros-keycloak-terraform/kc2tf.py main <kc_username> <kc_password> <kc_base_url> <realm_name>
+```
+
+Exemple:
+```bash
+python /home/git/external/kc2tf/bcros-keycloak-terraform/kc2tf.py main admin 'StrongP@ss!' https://keycloak.example.com bcregistry
+```
+
+Notes:
+- Les fichiers `.tf` sont générés et copiés dans `Terraform/`.
+- Les configurations générées peuvent nécessiter de légers ajustements manuels (p. ex. renommage de ressources en double, correction de contraintes).
+- Consultez les fichiers `.tf` du dépôt pour identifier ce qui reste à créer manuellement (p. ex. fournisseurs d’IDP).
+- Les secrets des clients sont exportés dans un fichier séparé (`client_secrets.tfvars`). Les secrets IDP restent à fournir manuellement.
 
 ## Source of inspiration
 

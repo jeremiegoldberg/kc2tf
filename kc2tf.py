@@ -2,7 +2,6 @@ import base64
 import json
 import time
 import requests
-import hcl2
 import sys
 
 import os
@@ -479,16 +478,13 @@ def process_all_users_in_group(base_url2, headers, group, groups, memberships):
             process_all_users_in_group(base_url2, headers, children, groups, memberships)
 
 
-def export_data(client, token, base_url, realm):
+def export_data(username, password, base_url, realm, client_id='admin-cli'):
     start = time.time()
     url = base_url + "/auth/realms/" + realm + "/protocol/openid-connect/token"
     print('...')
-    payload = "grant_type=client_credentials"
-    auth_str = client + ":" + token
-    basic_hash = base64.b64encode(auth_str.encode()).decode()
+    payload = f"grant_type=password&client_id={client_id}&username={username}&password={password}"
     headers = {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization': f'Basic {basic_hash}'
+        'Content-Type': 'application/x-www-form-urlencoded'
     }
 
     response = requests.request("POST", url, headers=headers, data=payload)
@@ -614,24 +610,6 @@ def process_scope_mappers():
                         f_out.write('\n}\n')
 
 
-def create_terraform_cloud_vars(workspace_id, auth_str):
-    with open('client_secrets.tfvars', 'r') as fp:
-        data = hcl2.load(fp)
-        headers = {
-            'Content-Type': 'application/vnd.api+json',
-            'Authorization': f'Bearer {auth_str}'
-        }
-        for key, value in data.items():
-            payload = {'data': { 'type': 'vars', 'attributes': {'hcl': True, 'sensitive': True, 'category': 'terraform'}, 'relationships': {'workspace': {'data': {'type': 'workspace'}}}}}
-            payload['data']['relationships']['workspace']['data']['id'] = workspace_id
-            payload['data']['attributes']['key'] = key
-            payload['data']['attributes']['value'] = json.dumps(value)
-
-            url = "https://app.terraform.io/api/v2/vars"
-            data = json.dumps(payload)
-            response = requests.request("POST", url, headers=headers, data=data)
-            print(response.json())
-
 def move_tf_configs_to_repo_dir(dst):
     with open('rsc_id_map.json', 'w') as f:
         json.dump(rsc_id_map, f, ensure_ascii=False, indent=4)
@@ -641,8 +619,8 @@ def move_tf_configs_to_repo_dir(dst):
         if filename.endswith(".tf"):
             shutil.copy(filename, dst)
 
-def main(client, client_creds, kc_url, realm, workspace_id, auth_str):
-    export_data(client, client_creds, kc_url, realm)
+def main(kc_username, kc_password, kc_url, realm):
+    export_data(kc_username, kc_password, kc_url, realm)
     process_realm_roles()
     process_groups()
     # process_authentications()
@@ -659,7 +637,6 @@ def main(client, client_creds, kc_url, realm, workspace_id, auth_str):
     process_client_mappers()
 
     move_tf_configs_to_repo_dir('./Terraform')
-    create_terraform_cloud_vars(workspace_id, auth_str)
 
 if __name__ == '__main__':
     flow_id_alias = {}
@@ -685,4 +662,4 @@ if __name__ == '__main__':
     extra_scopes = ['namex-scope', 'argocd-groups', 'service-accounts-scope'] # for now manually create these
     rsc_id_map = {}
     client_list = []
-    globals()[sys.argv[1]](sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6], sys.argv[7])
+    globals()[sys.argv[1]](sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5])
