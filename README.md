@@ -31,3 +31,11 @@ Notes:
 ## Source of inspiration
 
 [Health Gateway](https://github.com/bcgov/healthgateway/tree/dev/Tools/KeyCloak)
+
+## Références et remerciements
+
+Ce projet s’inspire et réutilise des idées de:
+
+- bcgov/bcros-keycloak-terraform — Export Keycloak objects to Terraform configs: https://github.com/bcgov/bcros-keycloak-terraform
+  
+Merci aux auteurs et contributeurs de ce dépôt pour leur travail, qui a servi de base et de référence à cette implémentation.
