@@ -1,3 +1,9 @@
+## À propos du projet
+
+Ce dépôt est un fork de `bcgov/bcros-keycloak-terraform`. Projet original et références:
+
+- https://github.com/bcgov/bcros-keycloak-terraform
+
 ## Prérequis
 
 - Python 3.x
