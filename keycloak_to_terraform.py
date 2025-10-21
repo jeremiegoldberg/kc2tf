@@ -88,44 +88,6 @@ provider "keycloak" {{
   realm                = "{realm}"
   display_name         = "{display_name}"
   enabled              = {str(enabled).lower()}
-  
-  # Configuration de sécurité
-  password_policy      = "length(8) and digits(2) and lowerCase(2) and upperCase(2) and specialChars(2)"
-  
-  # Configuration des sessions
-  sso_session_idle_timeout         = 1800
-  sso_session_max_lifespan         = 36000
-  offline_session_idle_timeout     = 2592000
-  offline_session_max_lifespan_enabled = true
-  offline_session_max_lifespan     = 5184000
-  
-  # Configuration des tokens
-  access_token_lifespan            = 300
-  access_token_lifespan_for_implicit_flow = 900
-  sso_session_idle_timeout_remember_me = 0
-  sso_session_max_lifespan_remember_me = 0
-  refresh_token_max_reuse         = 0
-  access_code_lifespan            = 60
-  access_code_lifespan_user_action = 300
-  access_code_lifespan_login      = 1800
-  action_token_generated_by_admin_lifespan = 43200
-  action_token_generated_by_user_lifespan = 300
-  oauth2_device_code_lifespan    = 600
-  oauth2_device_polling_interval = 5
-  
-  # Configuration des thèmes
-  login_theme = "keycloak"
-  account_theme = "keycloak"
-  admin_theme = "keycloak"
-  email_theme = "keycloak"
-  
-  # Configuration des utilisateurs
-  login_with_email_allowed = true
-  duplicate_emails_allowed = false
-  reset_password_allowed = true
-  edit_username_allowed = true
-  remember_me = true
-  verify_email = false
 }}
 '''
         return config
@@ -173,7 +135,6 @@ resource "keycloak_openid_client" "{client_id.replace('-', '_').replace(' ', '_'
   client_id                    = "{client_id}"
   name                         = "{name}"
   enabled                      = {str(enabled).lower()}
-  client_authenticator_type    = "{client_authenticator_type}"
   standard_flow_enabled        = {str(standard_flow_enabled).lower()}
   implicit_flow_enabled        = {str(implicit_flow_enabled).lower()}
   direct_access_grants_enabled = {str(direct_access_grants_enabled).lower()}
@@ -187,15 +148,6 @@ resource "keycloak_openid_client" "{client_id.replace('-', '_').replace(' ', '_'
             
             if web_origins:
                 config += f'  web_origins = {json.dumps(web_origins)}\n'
-            
-            if admin_url:
-                config += f'  admin_url = "{admin_url}"\n'
-            
-            if base_url:
-                config += f'  base_url = "{base_url}"\n'
-            
-            if root_url:
-                config += f'  root_url = "{root_url}"\n'
             
             config += "}\n"
             
@@ -347,7 +299,6 @@ resource "keycloak_user" "{resource_name}" {{
 resource "keycloak_oidc_identity_provider" "{alias}" {{
   realm             = keycloak_realm.{self.realm_data.get('realm', '')}.id
   alias             = "{alias}"
-  provider_id       = "{provider_id}"
   enabled           = {str(enabled).lower()}
   display_name      = "{display_name}"
   
@@ -357,7 +308,6 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
   client_id         = "{idp.get('config', {}).get('clientId', '')}"
   client_secret     = "{idp.get('config', {}).get('clientSecret', '')}"
   default_scopes    = "{idp.get('config', {}).get('defaultScope', 'openid')}"
-  
 }}
 '''
         
