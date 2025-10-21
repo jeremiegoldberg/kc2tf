@@ -579,7 +579,7 @@ def export_data(username, password, base_url, realm, client_id='admin-cli', debu
             print("- Paramètres manquants ou invalides")
             print("- Grant type non supporté")
         
-        print(f"\nURL utilisée: {url}")
+        print(f"\nURL utilisée: {auth_url}")
         print(f"Client ID: {client_id}")
         print(f"Username: {username}")
         sys.exit(1)
