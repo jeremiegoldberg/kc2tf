@@ -180,15 +180,6 @@ resource "keycloak_openid_client" "{client_id.replace('-', '_').replace(' ', '_'
   service_accounts_enabled     = {str(service_accounts_enabled).lower()}
   public_client                = {str(public_client).lower()}
   bearer_only                  = {str(bearer_only).lower()}
-  
-  # Configuration des tokens
-  access_token_lifespan         = 300
-  access_token_lifespan_for_implicit_flow = 900
-  client_session_idle_timeout   = 1800
-  client_session_max_lifespan   = 36000
-  offline_session_idle_timeout  = 2592000
-  offline_session_max_lifespan_enabled = true
-  offline_session_max_lifespan  = 5184000
 '''
             
             if redirect_uris:
@@ -254,11 +245,6 @@ resource "keycloak_role" "{resource_name}" {{
   name        = "{role_name}"
   description = "{description}"
   composite   = {str(composite).lower()}
-  
-  # Configuration des attributs du rôle
-  attributes = {{
-    displayName = "{role_name}"
-  }}
 }}
 '''
         
@@ -288,18 +274,7 @@ resource "keycloak_group" "{resource_name}" {{
             if parent_id:
                 config += f'  parent_id = keycloak_group.{parent_id}.id\n'
             
-            # Ajouter les attributs du groupe
-            config += f'''  
-  # Configuration des attributs du groupe
-  attributes = {{
-    displayName = "{group_name}"
-  }}
-  
-  # Configuration des rôles du groupe
-  realm_roles = []
-  client_roles = {{}}
-}}
-'''
+            config += "}\n"
             
             # Traiter les sous-groupes
             if 'subGroups' in group:
@@ -350,22 +325,7 @@ resource "keycloak_user" "{resource_name}" {{
             if email:
                 config += f'  email = "{email}"\n'
             
-            # Ajouter les attributs utilisateur
-            display_name = f"{first_name} {last_name}".strip()
-            config += f'''  
-  # Configuration des attributs utilisateur
-  attributes = {{
-    displayName = "{display_name}"
-  }}
-  
-  # Configuration des rôles utilisateur
-  realm_roles = []
-  client_roles = {{}}
-  
-  # Configuration des groupes utilisateur
-  groups = []
-}}
-'''
+            config += "}\n"
         
         return config
     
@@ -398,17 +358,6 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
   client_secret     = "{idp.get('config', {}).get('clientSecret', '')}"
   default_scopes    = "{idp.get('config', {}).get('defaultScope', 'openid')}"
   
-  # Configuration avancée
-  hide_on_login_page = false
-  trust_email       = false
-  store_token       = false
-  add_read_token_role_on_create = false
-  
-  # Configuration des attributs
-  extra_config = {{
-    clientAuthMethod = "client_secret_post"
-    syncMode = "IMPORT"
-  }}
 }}
 '''
         
