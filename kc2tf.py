@@ -529,17 +529,29 @@ def export_data(username, password, base_url, realm, client_id='admin-cli', debu
     url = base_url2 + "/partial-export?exportClients=true&exportGroupsAndRoles=true"
     if debug:
         print(f"[DEBUG] URL d'export: {url}")
+        print(f"[DEBUG] Headers d'export: {dict(headers)}")
     
     response = requests.request("POST", url, headers=headers, verify=False)
     print(response.status_code)
     
     if debug:
         print(f"[DEBUG] Code de statut d'export: {response.status_code}")
-        print(f"[DEBUG] Headers d'export: {dict(response.headers)}")
+        print(f"[DEBUG] Headers de réponse d'export: {dict(response.headers)}")
+        print(f"[DEBUG] Méthode utilisée: POST")
     
-    if response.status_code != 200:
+    if response.status_code == 405:
+        print("Erreur 405: Méthode non autorisée")
+        print("Tentative avec GET...")
+        response = requests.request("GET", url, headers=headers, verify=False)
+        if debug:
+            print(f"[DEBUG] Code de statut après GET: {response.status_code}")
+    
+    if response.status_code not in [200, 201]:
         print(f"Erreur lors de l'export: {response.status_code}")
         print(f"Réponse: {response.text}")
+        if debug:
+            print(f"[DEBUG] URL complète: {url}")
+            print(f"[DEBUG] Headers de requête: {dict(headers)}")
         sys.exit(1)
     
     response_json = response.json()
