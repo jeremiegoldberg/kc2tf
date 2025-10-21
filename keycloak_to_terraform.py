@@ -63,14 +63,10 @@ class KeycloakToTerraform:
 # Configuration du provider Keycloak
 # Remplacez les valeurs par vos paramètres de connexion
 provider "keycloak" {{
-  client_id                = "admin-cli"
-  username                 = "admin"  # Remplacez par votre nom d'utilisateur
-  password                 = "password"  # Remplacez par votre mot de passe
-  url                      = "https://keycloak.example.com"  # Remplacez par votre URL Keycloak
-  initial_login            = true
-  tls_insecure_skip_verify = false  # Mettre à true pour les certificats auto-signés
-  client_timeout           = 30
-  root_ca_certificate      = ""  # Chemin vers le certificat CA si nécessaire
+  client_id = "admin-cli"
+  username  = "admin"  # Remplacez par votre nom d'utilisateur
+  password  = "password"  # Remplacez par votre mot de passe
+  url       = "https://keycloak.example.com"  # Remplacez par votre URL Keycloak
 }}
 '''
         return provider_config
