@@ -529,18 +529,61 @@ def export_data(username, password, base_url, realm, client_id='admin-cli', debu
     export_data.keycloak_version = version
     
     print('...')
-    payload = f"grant_type=password&client_id={client_id}&username={username}&password={password}"
-    headers = {
-        'Content-Type': 'application/x-www-form-urlencoded'
-    }
+    
+    # Essayer différents clients pour l'authentification
+    clients_to_try = [client_id, 'admin-cli', 'realm-management', 'account']
+    
+    response = None
+    successful_client = None
+    
+    for current_client in clients_to_try:
+        if debug:
+            print(f"[DEBUG] Tentative avec client: {current_client}")
+        
+        payload = f"grant_type=password&client_id={current_client}&username={username}&password={password}"
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        }
 
-    if debug:
-        print(f"[DEBUG] Version Keycloak détectée: {version}")
-        print(f"[DEBUG] URL d'authentification: {auth_url}")
-        print(f"[DEBUG] Base admin: {admin_base}")
-        print(f"[DEBUG] Payload: grant_type=password&client_id={client_id}&username={username}&password=***")
+        if debug:
+            print(f"[DEBUG] Version Keycloak détectée: {version}")
+            print(f"[DEBUG] URL d'authentification: {auth_url}")
+            print(f"[DEBUG] Base admin: {admin_base}")
+            print(f"[DEBUG] Payload: grant_type=password&client_id={current_client}&username={username}&password=***")
 
-    response = requests.request("POST", auth_url, headers=headers, data=payload, verify=False)
+        response = requests.request("POST", auth_url, headers=headers, data=payload, verify=False)
+        
+        if response.status_code == 200:
+            successful_client = current_client
+            if debug:
+                print(f"[DEBUG] Authentification réussie avec client: {current_client}")
+            break
+        elif debug:
+            print(f"[DEBUG] Échec avec client {current_client}: {response.status_code}")
+    
+    if successful_client is None:
+        if debug:
+            print(f"[DEBUG] Aucun client n'a fonctionné. Dernière réponse: {response.status_code}")
+            print("[DEBUG] Tentative avec Basic Auth...")
+        
+        # Essayer Basic Auth comme alternative
+        auth_str = f"{username}:{password}"
+        basic_hash = base64.b64encode(auth_str.encode()).decode()
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Authorization': f'Basic {basic_hash}'
+        }
+        payload = "grant_type=client_credentials"
+        
+        response = requests.request("POST", auth_url, headers=headers, data=payload, verify=False)
+        
+        if response.status_code == 200:
+            successful_client = "basic_auth"
+            if debug:
+                print("[DEBUG] Authentification réussie avec Basic Auth")
+        else:
+            if debug:
+                print(f"[DEBUG] Basic Auth a échoué: {response.status_code}")
 
     if debug:
         print(f"[DEBUG] Code de statut: {response.status_code}")
