@@ -506,6 +506,37 @@ def export_data(username, password, base_url, realm, client_id='admin-cli', debu
         print(f"Réponse: {response.text}")
         if debug:
             print(f"[DEBUG] Headers de réponse: {dict(response.headers)}")
+        
+        # Diagnostic des erreurs courantes
+        if response.status_code == 401:
+            print("\n=== DIAGNOSTIC ERREUR 401 ===")
+            print("Causes possibles:")
+            print("- Nom d'utilisateur ou mot de passe incorrect")
+            print("- Compte désactivé ou verrouillé")
+            print("- Client ID incorrect (par défaut: admin-cli)")
+            print("- Realm inexistant ou mal configuré")
+        elif response.status_code == 403:
+            print("\n=== DIAGNOSTIC ERREUR 403 ===")
+            print("Causes possibles:")
+            print("- Compte sans permissions suffisantes")
+            print("- Client ID sans autorisation")
+            print("- Realm avec restrictions d'accès")
+        elif response.status_code == 404:
+            print("\n=== DIAGNOSTIC ERREUR 404 ===")
+            print("Causes possibles:")
+            print("- URL Keycloak incorrecte")
+            print("- Realm inexistant")
+            print("- Endpoint d'authentification incorrect")
+        elif response.status_code == 400:
+            print("\n=== DIAGNOSTIC ERREUR 400 ===")
+            print("Causes possibles:")
+            print("- Format de requête incorrect")
+            print("- Paramètres manquants ou invalides")
+            print("- Grant type non supporté")
+        
+        print(f"\nURL utilisée: {url}")
+        print(f"Client ID: {client_id}")
+        print(f"Username: {username}")
         sys.exit(1)
     
     response_data = response.json()
