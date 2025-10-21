@@ -1,4 +1,5 @@
-#!/usr/bin/env python3
+
+    #!/usr/bin/env python3
 """
 Script pour transformer un export Keycloak en code Terraform
 Provider: keycloak/keycloak
@@ -259,15 +260,15 @@ resource "keycloak_openid_client_optional_scopes" "{client_id.replace('-', '_').
         
         # Rôles du realm
         if 'realm' in roles:
-        for role in roles['realm']:
-            role_name = role.get('name', '')
-            description = role.get('description', '')
-            composite = role.get('composite', False)
-            
-            # Nettoyer le nom du rôle pour le nom de ressource
-            resource_name = role_name.replace('-', '_').replace(' ', '_').replace(':', '_').replace('.', '_')
-            
-            config += f'''
+            for role in roles['realm']:
+                role_name = role.get('name', '')
+                description = role.get('description', '')
+                composite = role.get('composite', False)
+                
+                # Nettoyer le nom du rôle pour le nom de ressource
+                resource_name = role_name.replace('-', '_').replace(' ', '_').replace(':', '_').replace('.', '_')
+                
+                config += f'''
 resource "keycloak_role" "{resource_name}" {{
   realm_id    = keycloak_realm.{self.realm_data.get('realm', '')}.id
   name        = "{role_name}"
