@@ -361,10 +361,11 @@ resource "keycloak_user" "{resource_name}" {{
                 config += f'  email = "{email}"\n'
             
             # Ajouter les attributs utilisateur
+            display_name = f"{first_name} {last_name}".strip()
             config += f'''  
   # Configuration des attributs utilisateur
   attributes = {{
-    displayName = "{first_name} {last_name}".strip()
+    displayName = "{display_name}"
   }}
   
   # Configuration des rôles utilisateur
