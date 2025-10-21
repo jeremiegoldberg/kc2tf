@@ -62,11 +62,14 @@ class KeycloakToTerraform:
 # Configuration du provider Keycloak
 # Remplacez les valeurs par vos paramètres de connexion
 provider "keycloak" {{
-  client_id     = "admin-cli"
-  username      = "admin"  # Remplacez par votre nom d'utilisateur
-  password      = "password"  # Remplacez par votre mot de passe
-  url           = "https://keycloak.example.com"  # Remplacez par votre URL Keycloak
-  initial_login = true
+  client_id                = "admin-cli"
+  username                 = "admin"  # Remplacez par votre nom d'utilisateur
+  password                 = "password"  # Remplacez par votre mot de passe
+  url                      = "https://keycloak.example.com"  # Remplacez par votre URL Keycloak
+  initial_login            = true
+  tls_insecure_skip_verify = false  # Mettre à true pour les certificats auto-signés
+  client_timeout           = 30
+  root_ca_certificate      = ""  # Chemin vers le certificat CA si nécessaire
 }}
 '''
         return provider_config
@@ -87,6 +90,8 @@ provider "keycloak" {{
   
   # Configuration de sécurité
   password_policy      = "length(8) and digits(2) and lowerCase(2) and upperCase(2) and specialChars(2)"
+  
+  # Protection contre la force brute
   brute_force_protection {{
     permanent_lockout                = false
     max_login_failures              = 30
@@ -115,6 +120,25 @@ provider "keycloak" {{
   action_token_generated_by_user_lifespan = 300
   oauth2_device_code_lifespan    = 600
   oauth2_device_polling_interval = 5
+  
+  # Configuration des thèmes
+  login_theme = "keycloak"
+  account_theme = "keycloak"
+  admin_theme = "keycloak"
+  email_theme = "keycloak"
+  
+  # Configuration des tokens
+  token_endpoint_auth_method = "client_secret_post"
+  login_with_email_allowed = true
+  duplicate_emails_allowed = false
+  reset_password_allowed = true
+  edit_username_allowed = true
+  remember_me = true
+  verify_email = false
+  login_theme = "keycloak"
+  account_theme = "keycloak"
+  admin_theme = "keycloak"
+  email_theme = "keycloak"
 }}
 '''
         return config
@@ -165,10 +189,25 @@ resource "keycloak_openid_client" "{client_id.replace('-', '_').replace(' ', '_'
   client_authenticator_type    = "{client_authenticator_type}"
   standard_flow_enabled        = {str(standard_flow_enabled).lower()}
   implicit_flow_enabled        = {str(implicit_flow_enabled).lower()}
-  direct_access_grants_enabled  = {str(direct_access_grants_enabled).lower()}
+  direct_access_grants_enabled = {str(direct_access_grants_enabled).lower()}
   service_accounts_enabled     = {str(service_accounts_enabled).lower()}
   public_client                = {str(public_client).lower()}
   bearer_only                  = {str(bearer_only).lower()}
+  
+  # Configuration des flows
+  authorization_code_flow_enabled = {str(standard_flow_enabled).lower()}
+  implicit_flow_enabled          = {str(implicit_flow_enabled).lower()}
+  direct_access_grants_enabled   = {str(direct_access_grants_enabled).lower()}
+  service_accounts_enabled       = {str(service_accounts_enabled).lower()}
+  
+  # Configuration des tokens
+  access_token_lifespan         = 300
+  access_token_lifespan_for_implicit_flow = 900
+  client_session_idle_timeout   = 1800
+  client_session_max_lifespan   = 36000
+  offline_session_idle_timeout  = 2592000
+  offline_session_max_lifespan_enabled = true
+  offline_session_max_lifespan  = 5184000
 '''
             
             if redirect_uris:
@@ -220,17 +259,25 @@ resource "keycloak_openid_client_optional_scopes" "{client_id.replace('-', '_').
         
         # Rôles du realm
         if 'realm' in roles:
-            for role in roles['realm']:
-                role_name = role.get('name', '')
-                description = role.get('description', '')
-                composite = role.get('composite', False)
-                
-                config += f'''
-resource "keycloak_role" "{role_name.replace('-', '_').replace(' ', '_')}" {{
+        for role in roles['realm']:
+            role_name = role.get('name', '')
+            description = role.get('description', '')
+            composite = role.get('composite', False)
+            
+            # Nettoyer le nom du rôle pour le nom de ressource
+            resource_name = role_name.replace('-', '_').replace(' ', '_').replace(':', '_').replace('.', '_')
+            
+            config += f'''
+resource "keycloak_role" "{resource_name}" {{
   realm_id    = keycloak_realm.{self.realm_data.get('realm', '')}.id
   name        = "{role_name}"
   description = "{description}"
   composite   = {str(composite).lower()}
+  
+  # Configuration des attributs du rôle
+  attributes = {{
+    "displayName" = "{role_name}"
+  }}
 }}
 '''
         
@@ -260,7 +307,18 @@ resource "keycloak_group" "{resource_name}" {{
             if parent_id:
                 config += f'  parent_id = keycloak_group.{parent_id}.id\n'
             
-            config += "}\n"
+            # Ajouter les attributs du groupe
+            config += f'''  
+  # Configuration des attributs du groupe
+  attributes = {{
+    "displayName" = "{group_name}"
+  }}
+  
+  # Configuration des rôles du groupe
+  realm_roles = []
+  client_roles = {{}}
+}}
+'''
             
             # Traiter les sous-groupes
             if 'subGroups' in group:
@@ -311,7 +369,21 @@ resource "keycloak_user" "{resource_name}" {{
             if email:
                 config += f'  email = "{email}"\n'
             
-            config += "}\n"
+            # Ajouter les attributs utilisateur
+            config += f'''  
+  # Configuration des attributs utilisateur
+  attributes = {{
+    "displayName" = "{first_name} {last_name}".strip()
+  }}
+  
+  # Configuration des rôles utilisateur
+  realm_roles = []
+  client_roles = {{}}
+  
+  # Configuration des groupes utilisateur
+  groups = []
+}}
+'''
         
         return config
     
@@ -343,6 +415,18 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
   client_id         = "{idp.get('config', {}).get('clientId', '')}"
   client_secret     = "{idp.get('config', {}).get('clientSecret', '')}"
   default_scopes    = "{idp.get('config', {}).get('defaultScope', 'openid')}"
+  
+  # Configuration avancée
+  hide_on_login_page = false
+  trust_email       = false
+  store_token       = false
+  add_read_token_role_on_create = false
+  
+  # Configuration des attributs
+  extra_config = {{
+    "clientAuthMethod" = "client_secret_post"
+    "syncMode" = "IMPORT"
+  }}
 }}
 '''
         
