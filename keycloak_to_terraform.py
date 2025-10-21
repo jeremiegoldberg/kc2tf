@@ -267,7 +267,7 @@ resource "keycloak_role" "{resource_name}" {{
   
   # Configuration des attributs du rôle
   attributes = {{
-    "displayName" = "{role_name}"
+    displayName = "{role_name}"
   }}
 }}
 '''
@@ -302,7 +302,7 @@ resource "keycloak_group" "{resource_name}" {{
             config += f'''  
   # Configuration des attributs du groupe
   attributes = {{
-    "displayName" = "{group_name}"
+    displayName = "{group_name}"
   }}
   
   # Configuration des rôles du groupe
@@ -364,7 +364,7 @@ resource "keycloak_user" "{resource_name}" {{
             config += f'''  
   # Configuration des attributs utilisateur
   attributes = {{
-    "displayName" = "{first_name} {last_name}".strip()
+    displayName = "{first_name} {last_name}".strip()
   }}
   
   # Configuration des rôles utilisateur
@@ -415,8 +415,8 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
   
   # Configuration des attributs
   extra_config = {{
-    "clientAuthMethod" = "client_secret_post"
-    "syncMode" = "IMPORT"
+    clientAuthMethod = "client_secret_post"
+    syncMode = "IMPORT"
   }}
 }}
 '''
