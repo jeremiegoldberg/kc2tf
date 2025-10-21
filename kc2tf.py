@@ -482,7 +482,7 @@ def process_all_users_in_group(base_url2, headers, group, groups, memberships):
             process_all_users_in_group(base_url2, headers, children, groups, memberships)
 
 
-def export_data(username, password, base_url, realm, client_id='admin-cli'):
+def export_data(username, password, base_url, realm, client_id='admin-cli', debug=False):
     start = time.time()
     url = base_url + "/auth/realms/" + realm + "/protocol/openid-connect/token"
     print('...')
@@ -491,9 +491,33 @@ def export_data(username, password, base_url, realm, client_id='admin-cli'):
         'Content-Type': 'application/x-www-form-urlencoded'
     }
 
+    if debug:
+        print(f"[DEBUG] URL d'authentification: {url}")
+        print(f"[DEBUG] Payload: grant_type=password&client_id={client_id}&username={username}&password=***")
+
     response = requests.request("POST", url, headers=headers, data=payload, verify=False)
 
-    token = response.json()['access_token']
+    if debug:
+        print(f"[DEBUG] Code de statut: {response.status_code}")
+        print(f"[DEBUG] Headers de réponse: {dict(response.headers)}")
+    
+    if response.status_code != 200:
+        print(f"Erreur d'authentification: {response.status_code}")
+        print(f"Réponse: {response.text}")
+        if debug:
+            print(f"[DEBUG] Headers de réponse: {dict(response.headers)}")
+        sys.exit(1)
+    
+    response_data = response.json()
+    if debug:
+        print(f"[DEBUG] Réponse d'authentification: {response_data}")
+    
+    if 'access_token' not in response_data:
+        print(f"Token d'accès non trouvé dans la réponse:")
+        print(f"Réponse complète: {response_data}")
+        sys.exit(1)
+    
+    token = response_data['access_token']
 
     headers = {
         'Content-Type': 'application/json',
@@ -503,8 +527,21 @@ def export_data(username, password, base_url, realm, client_id='admin-cli'):
     base_url2 = base_url + "/auth/admin/realms/" + realm
 
     url = base_url2 + "/partial-export?exportClients=true&exportGroupsAndRoles=true"
+    if debug:
+        print(f"[DEBUG] URL d'export: {url}")
+    
     response = requests.request("POST", url, headers=headers, verify=False)
     print(response.status_code)
+    
+    if debug:
+        print(f"[DEBUG] Code de statut d'export: {response.status_code}")
+        print(f"[DEBUG] Headers d'export: {dict(response.headers)}")
+    
+    if response.status_code != 200:
+        print(f"Erreur lors de l'export: {response.status_code}")
+        print(f"Réponse: {response.text}")
+        sys.exit(1)
+    
     response_json = response.json()
 
     for client in response_json['clients']:
@@ -623,8 +660,8 @@ def move_tf_configs_to_repo_dir(dst):
         if filename.endswith(".tf"):
             shutil.copy(filename, dst)
 
-def main(kc_username, kc_password, kc_url, realm):
-    export_data(kc_username, kc_password, kc_url, realm)
+def main(kc_username, kc_password, kc_url, realm, debug=False):
+    export_data(kc_username, kc_password, kc_url, realm, debug=debug)
     process_realm_roles()
     process_groups()
     # process_authentications()
@@ -666,4 +703,11 @@ if __name__ == '__main__':
     extra_scopes = ['namex-scope', 'argocd-groups', 'service-accounts-scope'] # for now manually create these
     rsc_id_map = {}
     client_list = []
-    globals()[sys.argv[1]](sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5])
+    # Vérifier si l'option debug est activée
+    debug = len(sys.argv) > 6 and sys.argv[6].lower() in ['true', '1', 'yes', 'debug']
+    
+    if debug:
+        print("[DEBUG] Mode debug activé")
+        print(f"[DEBUG] Arguments reçus: {sys.argv}")
+    
+    globals()[sys.argv[1]](sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], debug)
