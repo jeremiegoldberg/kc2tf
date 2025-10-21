@@ -92,15 +92,6 @@ provider "keycloak" {{
   # Configuration de sécurité
   password_policy      = "length(8) and digits(2) and lowerCase(2) and upperCase(2) and specialChars(2)"
   
-  # Protection contre la force brute
-  brute_force_protection {{
-    permanent_lockout                = false
-    max_login_failures              = 30
-    wait_increment_seconds          = 60
-    max_failure_wait_seconds        = 900
-    failure_reset_time_seconds      = 43200
-  }}
-  
   # Configuration des sessions
   sso_session_idle_timeout         = 1800
   sso_session_max_lifespan         = 36000
@@ -128,8 +119,7 @@ provider "keycloak" {{
   admin_theme = "keycloak"
   email_theme = "keycloak"
   
-  # Configuration des tokens
-  token_endpoint_auth_method = "client_secret_post"
+  # Configuration des utilisateurs
   login_with_email_allowed = true
   duplicate_emails_allowed = false
   reset_password_allowed = true
