@@ -482,9 +482,52 @@ def process_all_users_in_group(base_url2, headers, group, groups, memberships):
             process_all_users_in_group(base_url2, headers, children, groups, memberships)
 
 
+def detect_keycloak_version(base_url, debug=False):
+    """Détecte la version de Keycloak et retourne les endpoints appropriés"""
+    try:
+        # Essayer l'endpoint moderne (Keycloak 17+)
+        version_url = base_url.rstrip('/') + "/admin/realms/master"
+        response = requests.request("GET", version_url, verify=False, timeout=10)
+        if response.status_code == 200:
+            if debug:
+                print("[DEBUG] Détection Keycloak moderne (17+)")
+            return "modern"
+    except:
+        pass
+    
+    try:
+        # Essayer l'endpoint legacy (Keycloak < 17)
+        version_url = base_url.rstrip('/') + "/auth/admin/realms/master"
+        response = requests.request("GET", version_url, verify=False, timeout=10)
+        if response.status_code == 200:
+            if debug:
+                print("[DEBUG] Détection Keycloak legacy (< 17)")
+            return "legacy"
+    except:
+        pass
+    
+    if debug:
+        print("[DEBUG] Impossible de détecter la version, utilisation du mode legacy par défaut")
+    return "legacy"
+
 def export_data(username, password, base_url, realm, client_id='admin-cli', debug=False):
     start = time.time()
-    url = base_url + "/auth/realms/" + realm + "/protocol/openid-connect/token"
+    
+    # Détecter la version de Keycloak
+    version = detect_keycloak_version(base_url, debug)
+    
+    if version == "modern":
+        # Keycloak 17+ : nouveaux endpoints
+        auth_url = base_url.rstrip('/') + "/realms/" + realm + "/protocol/openid-connect/token"
+        admin_base = base_url.rstrip('/') + "/admin/realms/" + realm
+    else:
+        # Keycloak < 17 : endpoints legacy
+        auth_url = base_url.rstrip('/') + "/auth/realms/" + realm + "/protocol/openid-connect/token"
+        admin_base = base_url.rstrip('/') + "/auth/admin/realms/" + realm
+    
+    # Stocker la version pour utilisation ultérieure
+    export_data.keycloak_version = version
+    
     print('...')
     payload = f"grant_type=password&client_id={client_id}&username={username}&password={password}"
     headers = {
@@ -492,10 +535,12 @@ def export_data(username, password, base_url, realm, client_id='admin-cli', debu
     }
 
     if debug:
-        print(f"[DEBUG] URL d'authentification: {url}")
+        print(f"[DEBUG] Version Keycloak détectée: {version}")
+        print(f"[DEBUG] URL d'authentification: {auth_url}")
+        print(f"[DEBUG] Base admin: {admin_base}")
         print(f"[DEBUG] Payload: grant_type=password&client_id={client_id}&username={username}&password=***")
 
-    response = requests.request("POST", url, headers=headers, data=payload, verify=False)
+    response = requests.request("POST", auth_url, headers=headers, data=payload, verify=False)
 
     if debug:
         print(f"[DEBUG] Code de statut: {response.status_code}")
@@ -555,7 +600,8 @@ def export_data(username, password, base_url, realm, client_id='admin-cli', debu
         'Authorization': f'Bearer {token}',
     }
 
-    base_url2 = base_url + "/auth/admin/realms/" + realm
+    # Utiliser la base admin détectée
+    base_url2 = admin_base
 
     url = base_url2 + "/partial-export?exportClients=true&exportGroupsAndRoles=true"
     if debug:
@@ -576,6 +622,16 @@ def export_data(username, password, base_url, realm, client_id='admin-cli', debu
         response = requests.request("GET", url, headers=headers, verify=False)
         if debug:
             print(f"[DEBUG] Code de statut après GET: {response.status_code}")
+    
+    # Gestion spéciale pour Keycloak 25+ avec endpoints alternatifs
+    if response.status_code == 404 and export_data.keycloak_version == "modern":
+        if debug:
+            print("[DEBUG] Tentative avec endpoint alternatif pour Keycloak 25+")
+        # Essayer l'endpoint alternatif pour l'export
+        alt_url = base_url2 + "/export"
+        response = requests.request("GET", alt_url, headers=headers, verify=False)
+        if debug:
+            print(f"[DEBUG] Code de statut endpoint alternatif: {response.status_code}")
     
     if response.status_code not in [200, 201]:
         print(f"Erreur lors de l'export: {response.status_code}")
