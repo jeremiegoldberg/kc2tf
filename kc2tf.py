@@ -3,9 +3,13 @@ import json
 import time
 import requests
 import sys
+import urllib3
 
 import os
 import shutil
+
+# Désactiver les warnings SSL pour les certificats auto-signés
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def process_realm_roles():
     f = open('realm_dump.json')
@@ -340,7 +344,7 @@ def process_service_account_roles():
 
 def get_client_secret(base_url2, headers, client):
     url = base_url2 + "/clients/" + client['id'] + "/client-secret"
-    client_secret = requests.request("GET", url, headers=headers)
+    client_secret = requests.request("GET", url, headers=headers, verify=False)
     client['secret'] = client_secret.json()['value']
 
 
@@ -373,7 +377,7 @@ def write_idp_links(user, f_out):
     elif 'username' in user and user['username'].endswith('@github'):
         github_base_url = 'https://api.github.com/users/'
         github_base_url += user['username'][:-7]
-        response = requests.request("GET", github_base_url)
+        response = requests.request("GET", github_base_url, verify=False)
         response_json = response.json()
         if 'id' in response_json:
             f_out.write('\n\t\tfederated_identity {')
@@ -463,7 +467,7 @@ def save_sa_memberships_to_file(users, memberships):
 
 def process_all_users_in_group(base_url2, headers, group, groups, memberships):
     url = base_url2 + f'/groups/{group["id"]}/members?max=1000000'
-    response = requests.request("GET", url, headers=headers)
+    response = requests.request("GET", url, headers=headers, verify=False)
     memberships[group['path']] = response.json()
     for member in response.json():
         try:
@@ -487,7 +491,7 @@ def export_data(username, password, base_url, realm, client_id='admin-cli'):
         'Content-Type': 'application/x-www-form-urlencoded'
     }
 
-    response = requests.request("POST", url, headers=headers, data=payload)
+    response = requests.request("POST", url, headers=headers, data=payload, verify=False)
 
     token = response.json()['access_token']
 
@@ -499,13 +503,13 @@ def export_data(username, password, base_url, realm, client_id='admin-cli'):
     base_url2 = base_url + "/auth/admin/realms/" + realm
 
     url = base_url2 + "/partial-export?exportClients=true&exportGroupsAndRoles=true"
-    response = requests.request("POST", url, headers=headers)
+    response = requests.request("POST", url, headers=headers, verify=False)
     print(response.status_code)
     response_json = response.json()
 
     for client in response_json['clients']:
         url = base_url2 + "/clients/" + client['id'] + "/client-secret"
-        client_secret = requests.request("GET", url, headers=headers)
+        client_secret = requests.request("GET", url, headers=headers, verify=False)
         if 'value' in client_secret.json():
             client['secret'] = client_secret.json()['value']
 
