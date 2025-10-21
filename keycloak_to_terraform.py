@@ -136,10 +136,6 @@ provider "keycloak" {{
   edit_username_allowed = true
   remember_me = true
   verify_email = false
-  login_theme = "keycloak"
-  account_theme = "keycloak"
-  admin_theme = "keycloak"
-  email_theme = "keycloak"
 }}
 '''
         return config
@@ -194,12 +190,6 @@ resource "keycloak_openid_client" "{client_id.replace('-', '_').replace(' ', '_'
   service_accounts_enabled     = {str(service_accounts_enabled).lower()}
   public_client                = {str(public_client).lower()}
   bearer_only                  = {str(bearer_only).lower()}
-  
-  # Configuration des flows
-  authorization_code_flow_enabled = {str(standard_flow_enabled).lower()}
-  implicit_flow_enabled          = {str(implicit_flow_enabled).lower()}
-  direct_access_grants_enabled   = {str(direct_access_grants_enabled).lower()}
-  service_accounts_enabled       = {str(service_accounts_enabled).lower()}
   
   # Configuration des tokens
   access_token_lifespan         = 300
