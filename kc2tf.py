@@ -643,9 +643,12 @@ def export_data(username, password, base_url, realm, client_id='admin-cli', debu
     
     response_json = response.json()
 
+    # Initialiser url pour éviter l'erreur de variable non définie
+    url = base_url2 + "/partial-export"
+    
     for client in response_json['clients']:
-        url = base_url2 + "/clients/" + client['id'] + "/client-secret"
-        client_secret = requests.request("GET", url, headers=headers, verify=False)
+        client_url = base_url2 + "/clients/" + client['id'] + "/client-secret"
+        client_secret = requests.request("GET", client_url, headers=headers, verify=False)
         if 'value' in client_secret.json():
             client['secret'] = client_secret.json()['value']
 
