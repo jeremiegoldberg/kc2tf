@@ -646,6 +646,16 @@ def export_data(username, password, base_url, realm, client_id='admin-cli', debu
     # Utiliser la base admin détectée
     base_url2 = admin_base
 
+    # Vérifier les permissions et endpoints disponibles
+    if debug:
+        print(f"[DEBUG] Test des permissions sur {base_url2}")
+        test_response = requests.request("GET", base_url2, headers=headers, verify=False)
+        print(f"[DEBUG] Test permissions: {test_response.status_code}")
+        if test_response.status_code == 200:
+            print("[DEBUG] Permissions admin confirmées")
+        else:
+            print(f"[DEBUG] Problème de permissions: {test_response.status_code}")
+
     url = base_url2 + "/partial-export?exportClients=true&exportGroupsAndRoles=true"
     if debug:
         print(f"[DEBUG] URL d'export: {url}")
@@ -661,10 +671,35 @@ def export_data(username, password, base_url, realm, client_id='admin-cli', debu
     
     if response.status_code == 405:
         print("Erreur 405: Méthode non autorisée")
-        print("Tentative avec GET...")
+        print("Tentative avec différentes méthodes...")
+        
+        # Essayer GET
         response = requests.request("GET", url, headers=headers, verify=False)
         if debug:
             print(f"[DEBUG] Code de statut après GET: {response.status_code}")
+        
+        # Si GET échoue aussi, essayer PUT
+        if response.status_code == 405:
+            print("GET échoué aussi, tentative avec PUT...")
+            response = requests.request("PUT", url, headers=headers, verify=False)
+            if debug:
+                print(f"[DEBUG] Code de statut après PUT: {response.status_code}")
+        
+        # Si PUT échoue, essayer avec un endpoint différent
+        if response.status_code == 405:
+            print("PUT échoué aussi, tentative avec endpoint alternatif...")
+            alt_url = base_url2 + "/export"
+            response = requests.request("GET", alt_url, headers=headers, verify=False)
+            if debug:
+                print(f"[DEBUG] Code de statut endpoint alternatif: {response.status_code}")
+        
+        # Dernière tentative avec un endpoint legacy
+        if response.status_code == 405:
+            print("Dernière tentative avec endpoint legacy...")
+            legacy_url = base_url2 + "/partial-export"
+            response = requests.request("GET", legacy_url, headers=headers, verify=False)
+            if debug:
+                print(f"[DEBUG] Code de statut endpoint legacy: {response.status_code}")
     
     # Gestion spéciale pour Keycloak 25+ avec endpoints alternatifs
     if response.status_code == 404 and export_data.keycloak_version == "modern":
@@ -679,9 +714,25 @@ def export_data(username, password, base_url, realm, client_id='admin-cli', debu
     if response.status_code not in [200, 201]:
         print(f"Erreur lors de l'export: {response.status_code}")
         print(f"Réponse: {response.text}")
+        
+        # Diagnostic spécial pour l'erreur 405
+        if response.status_code == 405:
+            print("\n=== DIAGNOSTIC ERREUR 405 ===")
+            print("Causes possibles:")
+            print("- Version Keycloak incompatible avec l'export")
+            print("- Permissions insuffisantes pour l'export")
+            print("- Endpoint d'export désactivé")
+            print("- Configuration Keycloak restrictive")
+            print("\nSolutions:")
+            print("- Vérifiez que l'utilisateur a le rôle 'realm-admin'")
+            print("- Vérifiez que l'export est activé dans Keycloak")
+            print("- Essayez avec un compte administrateur master")
+        
         if debug:
             print(f"[DEBUG] URL complète: {url}")
             print(f"[DEBUG] Headers de requête: {dict(headers)}")
+            print(f"[DEBUG] Version Keycloak détectée: {export_data.keycloak_version}")
+        
         sys.exit(1)
     
     response_json = response.json()
