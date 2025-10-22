@@ -697,6 +697,19 @@ resource "keycloak_authentication_flow" "{resource_name}" {{
                             parent_flow_alias = flow_alias
                             break
                     
+                    # Si toujours pas trouvé, chercher dans les flows parents qui ont ce flow comme subflow
+                    if not parent_flow_alias or parent_flow_alias.strip() == '':
+                        for parent_alias, parent_flow in flow_mapping.items():
+                            if parent_flow.get('topLevel', True):
+                                parent_executions = parent_flow.get('authenticationExecutions', [])
+                                for parent_execution in parent_executions:
+                                    # Si l'exécution du parent a un flowAlias qui correspond à ce subflow
+                                    if parent_execution.get('flowAlias') == alias:
+                                        parent_flow_alias = parent_alias
+                                        break
+                                if parent_flow_alias:
+                                    break
+                    
                     # Si toujours pas trouvé, essayer de déduire du nom ou de la description
                     if not parent_flow_alias or parent_flow_alias.strip() == '':
                         # Chercher un flow parent probable basé sur le nom
