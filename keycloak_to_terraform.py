@@ -82,7 +82,7 @@ provider "keycloak" {{
         
         config = f'''resource "keycloak_realm" "{realm}" {{
   realm                = "{realm}"
-  display_name         = "{display_name}"
+  displayName          = "{display_name}"
   enabled              = {str(enabled).lower()}
 }}
 '''
@@ -127,43 +127,45 @@ provider "keycloak" {{
             
             config += f'''
 resource "keycloak_openid_client" "{client_id.replace('-', '_').replace(' ', '_')}" {{
-  realm_id                     = keycloak_realm.{self.realm_data.get('realm', '')}.id
-  client_id                    = "{client_id}"
+  realmId                      = keycloak_realm.{self.realm_data.get('realm', '')}.id
+  clientId                     = "{client_id}"
   name                         = "{name}"
   enabled                      = {str(enabled).lower()}
-  standard_flow_enabled        = {str(standard_flow_enabled).lower()}
-  implicit_flow_enabled        = {str(implicit_flow_enabled).lower()}
-  direct_access_grants_enabled = {str(direct_access_grants_enabled).lower()}
-  service_accounts_enabled     = {str(service_accounts_enabled).lower()}
-  public_client                = {str(public_client).lower()}
-  bearer_only                  = {str(bearer_only).lower()}
+  standardFlowEnabled          = {str(standard_flow_enabled).lower()}
+  implicitFlowEnabled          = {str(implicit_flow_enabled).lower()}
+  directAccessGrantsEnabled    = {str(direct_access_grants_enabled).lower()}
+  serviceAccountsEnabled      = {str(service_accounts_enabled).lower()}
+  publicClient                 = {str(public_client).lower()}
+  bearerOnly                   = {str(bearer_only).lower()}
 '''
             
             if redirect_uris:
-                config += f'  valid_redirect_uris = {json.dumps(redirect_uris)}\n'
+                config += f'  validRedirectUris = {json.dumps(redirect_uris)}\n'
             
             if web_origins:
-                config += f'  web_origins = {json.dumps(web_origins)}\n'
+                config += f'  webOrigins = {json.dumps(web_origins)}\n'
             
             config += "}\n"
             
             # Scopes par défaut
             if default_client_scopes:
+                client_resource_name = client_id.replace('-', '_').replace(' ', '_')
                 config += f'''
-resource "keycloak_openid_client_default_scopes" "{client_id.replace('-', '_').replace(' ', '_')}_default_scopes" {{
-  realm_id  = keycloak_realm.{self.realm_data.get('realm', '')}.id
-  client_id = keycloak_openid_client.{client_id.replace('-', '_').replace(' ', '_')}.id
-  default_scopes = {json.dumps(default_client_scopes)}
+resource "keycloak_openid_client_default_scopes" "{client_resource_name}_default_scopes" {{
+  realmId   = keycloak_realm.{self.realm_data.get('realm', '')}.id
+  clientId  = keycloak_openid_client.{client_resource_name}.id
+  defaultScopes = {json.dumps(default_client_scopes)}
 }}
 '''
             
             # Scopes optionnels
             if optional_client_scopes:
+                client_resource_name = client_id.replace('-', '_').replace(' ', '_')
                 config += f'''
-resource "keycloak_openid_client_optional_scopes" "{client_id.replace('-', '_').replace(' ', '_')}_optional_scopes" {{
-  realm_id  = keycloak_realm.{self.realm_data.get('realm', '')}.id
-  client_id = keycloak_openid_client.{client_id.replace('-', '_').replace(' ', '_')}.id
-  optional_scopes = {json.dumps(optional_client_scopes)}
+resource "keycloak_openid_client_optional_scopes" "{client_resource_name}_optional_scopes" {{
+  realmId   = keycloak_realm.{self.realm_data.get('realm', '')}.id
+  clientId  = keycloak_openid_client.{client_resource_name}.id
+  optionalScopes = {json.dumps(optional_client_scopes)}
 }}
 '''
         
@@ -189,7 +191,7 @@ resource "keycloak_openid_client_optional_scopes" "{client_id.replace('-', '_').
                 
                 config += f'''
 resource "keycloak_role" "{resource_name}" {{
-  realm_id    = keycloak_realm.{self.realm_data.get('realm', '')}.id
+  realmId     = keycloak_realm.{self.realm_data.get('realm', '')}.id
   name        = "{role_name}"
   description = "{description}"
   composite   = {str(composite).lower()}
@@ -215,12 +217,12 @@ resource "keycloak_role" "{resource_name}" {{
             
             config = f'''
 resource "keycloak_group" "{resource_name}" {{
-  realm_id  = keycloak_realm.{self.realm_data.get('realm', '')}.id
+  realmId   = keycloak_realm.{self.realm_data.get('realm', '')}.id
   name      = "{group_name}"
 '''
             
             if parent_id:
-                config += f'  parent_id = keycloak_group.{parent_id}.id\n'
+                config += f'  parentId = keycloak_group.{parent_id}.id\n'
             
             config += "}\n"
             
@@ -259,16 +261,16 @@ resource "keycloak_group" "{resource_name}" {{
             
             config += f'''
 resource "keycloak_user" "{resource_name}" {{
-  realm_id   = keycloak_realm.{self.realm_data.get('realm', '')}.id
+  realmId    = keycloak_realm.{self.realm_data.get('realm', '')}.id
   username   = "{username}"
   enabled    = {str(enabled).lower()}
 '''
             
             if first_name:
-                config += f'  first_name = "{first_name}"\n'
+                config += f'  firstName = "{first_name}"\n'
             
             if last_name:
-                config += f'  last_name = "{last_name}"\n'
+                config += f'  lastName = "{last_name}"\n'
             
             if email:
                 config += f'  email = "{email}"\n'
@@ -296,14 +298,14 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
   realm             = keycloak_realm.{self.realm_data.get('realm', '')}.id
   alias             = "{alias}"
   enabled           = {str(enabled).lower()}
-  display_name      = "{display_name}"
+  displayName       = "{display_name}"
   
   # Configuration OIDC
-  authorization_url = "{idp.get('config', {}).get('authorizationUrl', '')}"
-  token_url         = "{idp.get('config', {}).get('tokenUrl', '')}"
-  client_id         = "{idp.get('config', {}).get('clientId', '')}"
-  client_secret     = "{idp.get('config', {}).get('clientSecret', '')}"
-  default_scopes    = "{idp.get('config', {}).get('defaultScope', 'openid')}"
+  authorizationUrl  = "{idp.get('config', {}).get('authorizationUrl', 'https://example.com/auth')}"
+  tokenUrl          = "{idp.get('config', {}).get('tokenUrl', 'https://example.com/token')}"
+  clientId          = "{idp.get('config', {}).get('clientId', '')}"
+  clientSecret      = "{idp.get('config', {}).get('clientSecret', '')}"
+  defaultScopes     = "{idp.get('config', {}).get('defaultScope', 'openid')}"
 }}
 '''
         
