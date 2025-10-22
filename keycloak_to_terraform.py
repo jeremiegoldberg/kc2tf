@@ -39,6 +39,94 @@ class KeycloakToTerraform:
             cleaned = 'r_' + cleaned
         return cleaned
     
+    def replace_variables(self, content):
+        """Remplace les variables ${variable} par leurs valeurs dans le contenu"""
+        import re
+        
+        # Chercher toutes les variables ${variable}
+        variables = re.findall(r'\$\{([^}]+)\}', content)
+        
+        for variable in variables:
+            # Déterminer le type de variable et sa valeur
+            if variable.startswith('role_'):
+                # Variable de rôle
+                role_name = variable[5:]  # Enlever 'role_'
+                # Chercher le rôle correspondant dans les données
+                if self.realm_data and 'roles' in self.realm_data and 'realm' in self.realm_data['roles']:
+                    for role in self.realm_data['roles']['realm']:
+                        if role.get('name') == role_name:
+                            # Remplacer par la référence Terraform
+                            role_resource_name = self.clean_resource_name(role_name)
+                            replacement = f'keycloak_role.{role_resource_name}.id'
+                            content = content.replace(f'${{{variable}}}', replacement)
+                            break
+                    else:
+                        # Rôle non trouvé, remplacer par une chaîne vide
+                        content = content.replace(f'${{{variable}}}', '""')
+                else:
+                    content = content.replace(f'${{{variable}}}', '""')
+            
+            elif variable.startswith('client_'):
+                # Variable de client
+                client_id = variable[7:]  # Enlever 'client_'
+                # Chercher le client correspondant dans les données
+                if self.realm_data and 'clients' in self.realm_data:
+                    for client in self.realm_data['clients']:
+                        if client.get('clientId') == client_id:
+                            # Remplacer par la référence Terraform
+                            client_resource_name = client_id.replace('-', '_').replace(' ', '_')
+                            replacement = f'keycloak_openid_client.{client_resource_name}.id'
+                            content = content.replace(f'${{{variable}}}', replacement)
+                            break
+                    else:
+                        # Client non trouvé, remplacer par une chaîne vide
+                        content = content.replace(f'${{{variable}}}', '""')
+                else:
+                    content = content.replace(f'${{{variable}}}', '""')
+            
+            elif variable.startswith('group_'):
+                # Variable de groupe
+                group_name = variable[6:]  # Enlever 'group_'
+                # Chercher le groupe correspondant dans les données
+                if self.realm_data and 'groups' in self.realm_data:
+                    for group in self.realm_data['groups']:
+                        if group.get('name') == group_name:
+                            # Remplacer par la référence Terraform
+                            group_path = group.get('path', f'/{group_name}')
+                            group_resource_name = group_path.replace('/', '_').replace('-', '_').replace(' ', '_').lstrip('_')
+                            replacement = f'keycloak_group.{group_resource_name}.id'
+                            content = content.replace(f'${{{variable}}}', replacement)
+                            break
+                    else:
+                        # Groupe non trouvé, remplacer par une chaîne vide
+                        content = content.replace(f'${{{variable}}}', '""')
+                else:
+                    content = content.replace(f'${{{variable}}}', '""')
+            
+            elif variable.startswith('user_'):
+                # Variable d'utilisateur
+                username = variable[5:]  # Enlever 'user_'
+                # Chercher l'utilisateur correspondant dans les données
+                if self.realm_data and 'users' in self.realm_data:
+                    for user in self.realm_data['users']:
+                        if user.get('username') == username:
+                            # Remplacer par la référence Terraform
+                            user_resource_name = username.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
+                            replacement = f'keycloak_user.{user_resource_name}.id'
+                            content = content.replace(f'${{{variable}}}', replacement)
+                            break
+                    else:
+                        # Utilisateur non trouvé, remplacer par une chaîne vide
+                        content = content.replace(f'${{{variable}}}', '""')
+                else:
+                    content = content.replace(f'${{{variable}}}', '""')
+            
+            else:
+                # Variable inconnue, remplacer par une chaîne vide
+                content = content.replace(f'${{{variable}}}', '""')
+        
+        return content
+    
     def get_realm_resource_name(self):
         """Retourne le nom de ressource nettoyé du realm"""
         if not self.realm_data:
@@ -124,7 +212,10 @@ provider "keycloak" {{
             if client_id in default_clients:
                 continue
             
-            name = client.get('name', client_id)
+            name = client.get('name', '')
+            # S'assurer que le nom n'est pas vide
+            if not name or name.strip() == '':
+                name = client_id
             enabled = client.get('enabled', True)
             client_authenticator_type = client.get('clientAuthenticatorType', 'client-secret')
             standard_flow_enabled = client.get('standardFlowEnabled', False)
@@ -214,6 +305,14 @@ resource "keycloak_openid_client_optional_scopes" "{client_resource_name}_option
                 description = role.get('description', '')
                 composite = role.get('composite', False)
                 
+                # S'assurer que le nom du rôle n'est pas vide
+                if not role_name or role_name.strip() == '':
+                    continue
+                
+                # S'assurer que la description n'est pas vide
+                if not description or description.strip() == '':
+                    description = f"Role {role_name}"
+                
                 # Nettoyer le nom du rôle pour le nom de ressource
                 resource_name = role_name.replace('-', '_').replace(' ', '_').replace(':', '_').replace('.', '_')
                 
@@ -239,6 +338,14 @@ resource "keycloak_role" "{resource_name}" {{
             group_name = group.get('name', '')
             group_path = group.get('path', '')
             group_id = group.get('id', '')
+            
+            # S'assurer que le nom du groupe n'est pas vide
+            if not group_name or group_name.strip() == '':
+                return ""
+            
+            # S'assurer que le path du groupe n'est pas vide
+            if not group_path or group_path.strip() == '':
+                group_path = f"/{group_name}"
             
             resource_name = group_path.replace('/', '_').replace('-', '_').replace(' ', '_').lstrip('_')
             
@@ -275,13 +382,21 @@ resource "keycloak_group" "{resource_name}" {{
         
         for user in users:
             username = user.get('username', '')
-            if not username:
+            if not username or username.strip() == '':
                 continue
             
             first_name = user.get('firstName', '')
             last_name = user.get('lastName', '')
             email = user.get('email', '')
             enabled = user.get('enabled', True)
+            
+            # S'assurer que les noms ne sont pas vides
+            if not first_name or first_name.strip() == '':
+                first_name = ''
+            if not last_name or last_name.strip() == '':
+                last_name = ''
+            if not email or email.strip() == '':
+                email = ''
             
             # Nettoyer le nom d'utilisateur pour le nom de ressource
             resource_name = username.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
@@ -318,7 +433,15 @@ resource "keycloak_user" "{resource_name}" {{
             alias = idp.get('alias', '')
             provider_id = idp.get('providerId', '')
             enabled = idp.get('enabled', True)
-            display_name = idp.get('displayName', alias)
+            display_name = idp.get('displayName', '')
+            
+            # S'assurer que l'alias n'est pas vide
+            if not alias or alias.strip() == '':
+                continue
+            
+            # S'assurer que le display_name n'est pas vide
+            if not display_name or display_name.strip() == '':
+                display_name = alias
             
             config += f'''
 resource "keycloak_oidc_identity_provider" "{alias}" {{
@@ -364,27 +487,27 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
         # Fournisseurs d'identité
         idps_config = self.generate_identity_providers_config()
         
-        # Écrire les fichiers
+        # Écrire les fichiers avec remplacement des variables
         with open(f"{self.output_dir}/provider.tf", "w", encoding="utf-8") as f:
-            f.write(provider_config)
+            f.write(self.replace_variables(provider_config))
         
         with open(f"{self.output_dir}/realm.tf", "w", encoding="utf-8") as f:
-            f.write(realm_config)
+            f.write(self.replace_variables(realm_config))
         
         with open(f"{self.output_dir}/clients.tf", "w", encoding="utf-8") as f:
-            f.write(clients_config)
+            f.write(self.replace_variables(clients_config))
         
         with open(f"{self.output_dir}/roles.tf", "w", encoding="utf-8") as f:
-            f.write(roles_config)
+            f.write(self.replace_variables(roles_config))
         
         with open(f"{self.output_dir}/groups.tf", "w", encoding="utf-8") as f:
-            f.write(groups_config)
+            f.write(self.replace_variables(groups_config))
         
         with open(f"{self.output_dir}/users.tf", "w", encoding="utf-8") as f:
-            f.write(users_config)
+            f.write(self.replace_variables(users_config))
         
         with open(f"{self.output_dir}/identity_providers.tf", "w", encoding="utf-8") as f:
-            f.write(idps_config)
+            f.write(self.replace_variables(idps_config))
         
         print(f"✅ Configurations Terraform générées dans le répertoire '{self.output_dir}'")
         print("📁 Fichiers créés:")
