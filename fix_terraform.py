@@ -26,7 +26,7 @@ class TerraformFixer:
         # Attributs supportés par chaque ressource
         self.supported_attributes = {
             'keycloak_realm': [
-                'realm', 'displayName', 'enabled', 'password_policy',
+                'realm', 'display_name', 'enabled', 'password_policy',
                 'sso_session_idle_timeout', 'sso_session_max_lifespan',
                 'offline_session_idle_timeout', 'offline_session_max_lifespan_enabled',
                 'offline_session_max_lifespan', 'access_token_lifespan',
@@ -34,46 +34,46 @@ class TerraformFixer:
                 'account_theme', 'admin_theme', 'email_theme'
             ],
             'keycloak_user': [
-                'realmId', 'username', 'enabled', 'firstName', 'lastName',
+                'realm_id', 'username', 'enabled', 'first_name', 'last_name',
                 'email', 'attributes', 'initial_password'
             ],
             'keycloak_group': [
-                'realmId', 'name', 'parentId', 'attributes'
+                'realm_id', 'name', 'parent_id', 'attributes'
             ],
             'keycloak_role': [
-                'realmId', 'name', 'description', 'composite', 'attributes'
+                'realm_id', 'name', 'description', 'composite', 'attributes'
             ],
             'keycloak_openid_client': [
-                'realmId', 'clientId', 'name', 'enabled', 'client_authenticator_type',
-                'standardFlowEnabled', 'implicitFlowEnabled', 'directAccessGrantsEnabled',
-                'serviceAccountsEnabled', 'publicClient', 'bearerOnly',
-                'validRedirectUris', 'webOrigins', 'admin_url', 'base_url', 'root_url',
+                'realm_id', 'client_id', 'name', 'enabled', 'client_authenticator_type',
+                'standard_flow_enabled', 'implicit_flow_enabled', 'direct_access_grants_enabled',
+                'service_accounts_enabled', 'public_client', 'bearer_only',
+                'valid_redirect_uris', 'web_origins', 'admin_url', 'base_url', 'root_url',
                 'access_type', 'consent_required', 'frontchannel_logout_enabled'
             ],
             'keycloak_oidc_identity_provider': [
-                'realm', 'alias', 'enabled', 'displayName', 'provider_id',
-                'authorizationUrl', 'tokenUrl', 'clientId', 'clientSecret',
-                'defaultScopes', 'hide_on_login_page', 'trust_email', 'store_token',
+                'realm', 'alias', 'enabled', 'display_name', 'provider_id',
+                'authorization_url', 'token_url', 'client_id', 'client_secret',
+                'default_scopes', 'hide_on_login_page', 'trust_email', 'store_token',
                 'add_read_token_role_on_create', 'extra_config'
             ],
             'keycloak_openid_client_default_scopes': [
-                'realmId', 'clientId', 'defaultScopes'
+                'realm_id', 'client_id', 'default_scopes'
             ],
             'keycloak_openid_client_optional_scopes': [
-                'realmId', 'clientId', 'optionalScopes'
+                'realm_id', 'client_id', 'optional_scopes'
             ]
         }
         
         # Attributs requis pour chaque ressource
         self.required_attributes = {
             'keycloak_realm': ['realm'],
-            'keycloak_user': ['realmId', 'username'],
-            'keycloak_group': ['realmId', 'name'],
-            'keycloak_role': ['realmId', 'name'],
-            'keycloak_openid_client': ['realmId', 'clientId'],
+            'keycloak_user': ['realm_id', 'username'],
+            'keycloak_group': ['realm_id', 'name'],
+            'keycloak_role': ['realm_id', 'name'],
+            'keycloak_openid_client': ['realm_id', 'client_id'],
             'keycloak_oidc_identity_provider': ['realm', 'alias'],
-            'keycloak_openid_client_default_scopes': ['realmId', 'clientId', 'defaultScopes'],
-            'keycloak_openid_client_optional_scopes': ['realmId', 'clientId', 'optionalScopes']
+            'keycloak_openid_client_default_scopes': ['realm_id', 'client_id', 'default_scopes'],
+            'keycloak_openid_client_optional_scopes': ['realm_id', 'client_id', 'optional_scopes']
         }
     
     def fix_file(self, file_path: Path) -> bool:
