@@ -29,6 +29,23 @@ class KeycloakToTerraform:
         if self.debug:
             print(f"[DEBUG] {message}")
     
+    def clean_resource_name(self, name):
+        """Nettoie un nom pour qu'il soit valide comme nom de ressource Terraform"""
+        # Remplacer les caractères non valides par des underscores
+        import re
+        cleaned = re.sub(r'[^a-zA-Z0-9_]', '_', name)
+        # S'assurer que le nom commence par une lettre
+        if cleaned and not cleaned[0].isalpha():
+            cleaned = 'r_' + cleaned
+        return cleaned
+    
+    def get_realm_resource_name(self):
+        """Retourne le nom de ressource nettoyé du realm"""
+        if not self.realm_data:
+            return ""
+        realm = self.realm_data.get('realm', '')
+        return self.clean_resource_name(realm)
+    
     def load_realm_export(self, file_path: str) -> Dict[str, Any]:
         """Charge l'export Keycloak depuis un fichier JSON"""
         try:
@@ -80,7 +97,10 @@ provider "keycloak" {{
         display_name = self.realm_data.get('displayName', realm)
         enabled = self.realm_data.get('enabled', True)
         
-        config = f'''resource "keycloak_realm" "{realm}" {{
+        # Nettoyer le nom du realm pour le nom de ressource
+        realm_resource_name = self.get_realm_resource_name()
+        
+        config = f'''resource "keycloak_realm" "{realm_resource_name}" {{
   realm                = "{realm}"
   display_name         = "{display_name}"
   enabled              = {str(enabled).lower()}
@@ -127,7 +147,7 @@ provider "keycloak" {{
             
             config += f'''
 resource "keycloak_openid_client" "{client_id.replace('-', '_').replace(' ', '_')}" {{
-  realm_id                     = keycloak_realm.{self.realm_data.get('realm', '')}.id
+        realm_id                     = keycloak_realm.{self.get_realm_resource_name()}.id
   client_id                    = "{client_id}"
   name                         = "{name}"
   enabled                      = {str(enabled).lower()}
@@ -152,7 +172,7 @@ resource "keycloak_openid_client" "{client_id.replace('-', '_').replace(' ', '_'
                 client_resource_name = client_id.replace('-', '_').replace(' ', '_')
                 config += f'''
 resource "keycloak_openid_client_default_scopes" "{client_resource_name}_default_scopes" {{
-  realm_id   = keycloak_realm.{self.realm_data.get('realm', '')}.id
+        realm_id   = keycloak_realm.{self.get_realm_resource_name()}.id
   client_id  = keycloak_openid_client.{client_resource_name}.id
   default_scopes = {json.dumps(default_client_scopes)}
 }}
@@ -163,7 +183,7 @@ resource "keycloak_openid_client_default_scopes" "{client_resource_name}_default
                 client_resource_name = client_id.replace('-', '_').replace(' ', '_')
                 config += f'''
 resource "keycloak_openid_client_optional_scopes" "{client_resource_name}_optional_scopes" {{
-  realm_id   = keycloak_realm.{self.realm_data.get('realm', '')}.id
+        realm_id   = keycloak_realm.{self.get_realm_resource_name()}.id
   client_id  = keycloak_openid_client.{client_resource_name}.id
   optional_scopes = {json.dumps(optional_client_scopes)}
 }}
@@ -191,10 +211,9 @@ resource "keycloak_openid_client_optional_scopes" "{client_resource_name}_option
                 
                 config += f'''
 resource "keycloak_role" "{resource_name}" {{
-  realm_id    = keycloak_realm.{self.realm_data.get('realm', '')}.id
+        realm_id    = keycloak_realm.{self.get_realm_resource_name()}.id
   name        = "{role_name}"
   description = "{description}"
-  composite   = {str(composite).lower()}
 }}
 '''
         
@@ -217,7 +236,7 @@ resource "keycloak_role" "{resource_name}" {{
             
             config = f'''
 resource "keycloak_group" "{resource_name}" {{
-  realm_id  = keycloak_realm.{self.realm_data.get('realm', '')}.id
+        realm_id  = keycloak_realm.{self.get_realm_resource_name()}.id
   name      = "{group_name}"
 '''
             
@@ -261,7 +280,7 @@ resource "keycloak_group" "{resource_name}" {{
             
             config += f'''
 resource "keycloak_user" "{resource_name}" {{
-  realm_id   = keycloak_realm.{self.realm_data.get('realm', '')}.id
+        realm_id   = keycloak_realm.{self.get_realm_resource_name()}.id
   username   = "{username}"
   enabled    = {str(enabled).lower()}
 '''
@@ -295,7 +314,7 @@ resource "keycloak_user" "{resource_name}" {{
             
             config += f'''
 resource "keycloak_oidc_identity_provider" "{alias}" {{
-  realm             = keycloak_realm.{self.realm_data.get('realm', '')}.id
+        realm             = keycloak_realm.{self.get_realm_resource_name()}.id
   alias             = "{alias}"
   enabled           = {str(enabled).lower()}
   display_name      = "{display_name}"

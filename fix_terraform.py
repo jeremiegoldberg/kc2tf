@@ -41,7 +41,7 @@ class TerraformFixer:
                 'realm_id', 'name', 'parent_id', 'attributes'
             ],
             'keycloak_role': [
-                'realm_id', 'name', 'description', 'composite', 'attributes'
+                'realm_id', 'name', 'description', 'attributes'
             ],
             'keycloak_openid_client': [
                 'realm_id', 'client_id', 'name', 'enabled', 'client_authenticator_type',
