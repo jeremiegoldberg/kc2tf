@@ -50,14 +50,13 @@ class TerraformAnalyzer:
                 'realm_id', 'name', 'description', 'attributes'
             ],
             'keycloak_openid_client': [
-                'realm_id', 'client_id', 'name', 'enabled', 'client_authenticator_type',
+                'realm_id', 'client_id', 'name', 'enabled', 'access_type', 'client_authenticator_type',
                 'standard_flow_enabled', 'implicit_flow_enabled', 'direct_access_grants_enabled',
-                'service_accounts_enabled', 'public_client', 'bearer_only',
-                'valid_redirect_uris', 'web_origins', 'admin_url', 'base_url', 'root_url',
-                'access_type', 'consent_required', 'frontchannel_logout_enabled'
+                'service_accounts_enabled', 'valid_redirect_uris', 'web_origins', 'admin_url', 'base_url', 'root_url',
+                'consent_required', 'frontchannel_logout_enabled'
             ],
             'keycloak_oidc_identity_provider': [
-                'realm', 'alias', 'enabled', 'display_name', 'provider_id',
+                'realm', 'alias', 'enabled', 'display_name', 'access_type', 'provider_id',
                 'authorization_url', 'token_url', 'client_id', 'client_secret',
                 'default_scopes', 'hide_on_login_page', 'trust_email', 'store_token',
                 'add_read_token_role_on_create', 'extra_config'

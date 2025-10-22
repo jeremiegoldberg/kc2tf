@@ -145,18 +145,25 @@ provider "keycloak" {{
             default_client_scopes = client.get('defaultClientScopes', [])
             optional_client_scopes = client.get('optionalClientScopes', [])
             
+            # Déterminer le type d'accès basé sur les attributs du client
+            if bearer_only:
+                access_type = "BEARER-ONLY"
+            elif public_client:
+                access_type = "PUBLIC"
+            else:
+                access_type = "CONFIDENTIAL"
+            
             config += f'''
 resource "keycloak_openid_client" "{client_id.replace('-', '_').replace(' ', '_')}" {{
         realm_id                     = keycloak_realm.{self.get_realm_resource_name()}.id
   client_id                    = "{client_id}"
   name                         = "{name}"
   enabled                      = {str(enabled).lower()}
+  access_type                  = "{access_type}"
   standard_flow_enabled        = {str(standard_flow_enabled).lower()}
   implicit_flow_enabled        = {str(implicit_flow_enabled).lower()}
   direct_access_grants_enabled = {str(direct_access_grants_enabled).lower()}
   service_accounts_enabled     = {str(service_accounts_enabled).lower()}
-  public_client                = {str(public_client).lower()}
-  bearer_only                  = {str(bearer_only).lower()}
 '''
             
             if redirect_uris:
@@ -318,6 +325,7 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
   alias             = "{alias}"
   enabled           = {str(enabled).lower()}
   display_name      = "{display_name}"
+  access_type        = "PUBLIC"
   
   # Configuration OIDC
   authorization_url = "{idp.get('config', {}).get('authorizationUrl', 'https://example.com/auth')}"
