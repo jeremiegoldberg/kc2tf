@@ -44,8 +44,7 @@ class KeycloakToTerraform:
             # Scopes par défaut créés automatiquement
             'default_scopes': [
                 'acr', 'web-origins', 'profile', 'roles', 'email', 
-                'address', 'phone', 'offline_access', 'microprofile-jwt',
-                'role_list'
+                'address', 'phone', 'offline_access', 'microprofile-jwt'
             ],
             
             # Flows d'authentification par défaut créés automatiquement
