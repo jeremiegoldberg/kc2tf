@@ -648,6 +648,13 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
         config = ""
         flows = self.realm_data['authenticationFlows']
         
+        # Créer un mapping des flows pour faciliter la recherche des parents
+        flow_mapping = {}
+        for flow in flows:
+            alias = flow.get('alias', '')
+            if alias and alias.strip():
+                flow_mapping[alias] = flow
+        
         for flow in flows:
             alias = flow.get('alias', '')
             if not alias or alias.strip() == '':
@@ -676,9 +683,32 @@ resource "keycloak_authentication_flow" "{resource_name}" {{
 }}
 '''
             else:
-                # Subflow
+                # Subflow - améliorer la recherche du flow parent
                 parent_flow_alias = flow.get('parentFlowAlias', '')
                 requirement = flow.get('requirement', 'REQUIRED')
+                
+                # Si parentFlowAlias est vide, essayer de trouver le parent via d'autres moyens
+                if not parent_flow_alias or parent_flow_alias.strip() == '':
+                    # Chercher dans les executions pour trouver le flow parent
+                    executions = flow.get('authenticationExecutions', [])
+                    for execution in executions:
+                        flow_alias = execution.get('flowAlias', '')
+                        if flow_alias and flow_alias in flow_mapping:
+                            parent_flow_alias = flow_alias
+                            break
+                    
+                    # Si toujours pas trouvé, essayer de déduire du nom ou de la description
+                    if not parent_flow_alias or parent_flow_alias.strip() == '':
+                        # Chercher un flow parent probable basé sur le nom
+                        for parent_alias, parent_flow in flow_mapping.items():
+                            if parent_flow.get('topLevel', True) and alias.lower() in parent_alias.lower():
+                                parent_flow_alias = parent_alias
+                                break
+                
+                # Si toujours pas de parent trouvé, ignorer ce subflow
+                if not parent_flow_alias or parent_flow_alias.strip() == '':
+                    self.log_debug(f"Subflow '{alias}' ignoré (aucun flow parent trouvé)")
+                    continue
                 
                 # Nettoyer le nom du flow parent pour la référence
                 parent_flow_resource_name = parent_flow_alias.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
