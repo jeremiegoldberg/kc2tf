@@ -153,8 +153,11 @@ provider "keycloak" {{
             else:
                 access_type = "CONFIDENTIAL"
             
+            # Générer le nom de ressource client de manière cohérente
+            client_resource_name = client_id.replace('-', '_').replace(' ', '_')
+            
             config += f'''
-resource "keycloak_openid_client" "{client_id.replace('-', '_').replace(' ', '_')}" {{
+resource "keycloak_openid_client" "{client_resource_name}" {{
         realm_id                     = keycloak_realm.{self.get_realm_resource_name()}.id
   client_id                    = "{client_id}"
   name                         = "{name}"
@@ -176,7 +179,6 @@ resource "keycloak_openid_client" "{client_id.replace('-', '_').replace(' ', '_'
             
             # Scopes par défaut
             if default_client_scopes:
-                client_resource_name = client_id.replace('-', '_').replace(' ', '_')
                 config += f'''
 resource "keycloak_openid_client_default_scopes" "{client_resource_name}_default_scopes" {{
         realm_id   = keycloak_realm.{self.get_realm_resource_name()}.id
@@ -187,7 +189,6 @@ resource "keycloak_openid_client_default_scopes" "{client_resource_name}_default
             
             # Scopes optionnels
             if optional_client_scopes:
-                client_resource_name = client_id.replace('-', '_').replace(' ', '_')
                 config += f'''
 resource "keycloak_openid_client_optional_scopes" "{client_resource_name}_optional_scopes" {{
         realm_id   = keycloak_realm.{self.get_realm_resource_name()}.id
