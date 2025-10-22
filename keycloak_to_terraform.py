@@ -408,7 +408,6 @@ resource "keycloak_openid_client" "{client_resource_name}" {{
                 if acr_loa_map:
                     try:
                         # Parser le JSON et le reformater pour Terraform
-                        import json
                         acr_loa_dict = json.loads(acr_loa_map)
                         config += f'    "acr.loa.map" = "{json.dumps(acr_loa_dict)}"\n'
                     except json.JSONDecodeError:
