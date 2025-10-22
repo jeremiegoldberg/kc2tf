@@ -759,6 +759,29 @@ resource "keycloak_authentication_execution" "{execution_resource_name}" {{
         config = ""
         authenticator_configs = self.realm_data['authenticatorConfig']
         
+        # Créer un mapping des alias de config vers les exécutions
+        execution_mapping = {}
+        if 'authenticationFlows' in self.realm_data:
+            for flow in self.realm_data['authenticationFlows']:
+                if self.is_auto_created_object(flow.get('alias', ''), 'flow'):
+                    continue
+                
+                flow_resource_name = flow.get('alias', '').replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
+                executions = flow.get('authenticationExecutions', [])
+                
+                for i, execution in enumerate(executions):
+                    authenticator = execution.get('authenticator', '')
+                    if not authenticator:
+                        continue
+                    
+                    authenticator_resource_name = authenticator.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
+                    execution_resource_name = f"{flow_resource_name}_{authenticator_resource_name}_{i}"
+                    
+                    # Mapper l'alias de config vers l'exécution
+                    config_alias = execution.get('authenticatorConfig', '')
+                    if config_alias:
+                        execution_mapping[config_alias] = execution_resource_name
+        
         for auth_config in authenticator_configs:
             alias = auth_config.get('alias', '')
             if not alias or alias.strip() == '':
@@ -768,14 +791,21 @@ resource "keycloak_authentication_execution" "{execution_resource_name}" {{
             if not config_data:
                 continue
             
+            # Trouver l'exécution correspondante
+            execution_id = execution_mapping.get(alias, '')
+            if not execution_id:
+                self.log_debug(f"Configuration '{alias}' ignorée (aucune exécution correspondante trouvée)")
+                continue
+            
             # Nettoyer le nom pour le nom de ressource
             resource_name = alias.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
             
             config += f'''
 resource "keycloak_authentication_execution_config" "{resource_name}" {{
-  realm_id = keycloak_realm.{self.get_realm_resource_name()}.id
-  alias    = "{alias}"
-  config   = {{
+  realm_id     = keycloak_realm.{self.get_realm_resource_name()}.id
+  alias        = "{alias}"
+  execution_id = keycloak_authentication_execution.{execution_id}.id
+  config       = {{
 '''
             
             for key, value in config_data.items():
