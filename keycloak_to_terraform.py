@@ -213,6 +213,36 @@ class KeycloakToTerraform:
                 else:
                     content = content.replace(f'${{{variable}}}', '')
             
+            elif variable.startswith('scope_'):
+                # Variable de scope
+                scope_name = variable[6:]  # Enlever 'scope_'
+                # Vérifier si c'est un scope SAML builtin
+                if scope_name in self.auto_created_objects['default_saml_scopes']:
+                    # Scope SAML builtin - remplacer par la valeur directe
+                    content = content.replace(f'${{{variable}}}', scope_name)
+                else:
+                    # Chercher le scope correspondant dans les données
+                    if self.realm_data and 'clientScopes' in self.realm_data:
+                        for scope in self.realm_data['clientScopes']:
+                            if scope.get('name') == scope_name:
+                                # Déterminer le type de scope
+                                protocol = scope.get('protocol', 'openid-connect')
+                                scope_resource_name = scope_name.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
+                                if protocol == 'openid-connect':
+                                    replacement = f'keycloak_openid_client_scope.{scope_resource_name}.id'
+                                elif protocol == 'saml':
+                                    replacement = f'keycloak_saml_client_scope.{scope_resource_name}.id'
+                                else:
+                                    replacement = scope_name
+                                content = content.replace(f'${{{variable}}}', replacement)
+                                break
+                        else:
+                            # Scope non trouvé, remplacer par la valeur directe
+                            content = content.replace(f'${{{variable}}}', scope_name)
+                    else:
+                        # Pas de scopes, remplacer par la valeur directe
+                        content = content.replace(f'${{{variable}}}', scope_name)
+            
             else:
                 # Variable inconnue, remplacer par une chaîne vide
                 content = content.replace(f'${{{variable}}}', '')
@@ -537,16 +567,8 @@ data "keycloak_openid_client_scope" "default_scope_{scope_resource_name}" {{
 }}
 '''
         
-        # Data sources pour les scopes SAML par défaut
-        config += "\n# Data sources pour les scopes SAML automatiquement créés par Keycloak\n"
-        for scope in self.auto_created_objects['default_saml_scopes']:
-            scope_resource_name = scope.replace('-', '_').replace(' ', '_')
-            config += f'''
-data "keycloak_saml_client_scope" "default_scope_{scope_resource_name}" {{
-  realm_id = keycloak_realm.{self.get_realm_resource_name()}.id
-  name     = "{scope}"
-}}
-'''
+        # Note: Les scopes SAML builtin ne sont pas supportés comme data sources
+        # par le provider keycloak/keycloak, ils sont référencés directement par leur nom
         
         return config
     
@@ -678,6 +700,11 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
             # Exclure les scopes par défaut
             if self.is_auto_created_object(name, 'scope'):
                 self.log_debug(f"Scope '{name}' ignoré (créé automatiquement par Keycloak)")
+                continue
+            
+            # Exclure explicitement les scopes SAML builtin même s'ils sont dans l'export
+            if name in self.auto_created_objects['default_saml_scopes']:
+                self.log_debug(f"Scope SAML '{name}' ignoré (scope SAML builtin)")
                 continue
             
             description = scope.get('description', '')
