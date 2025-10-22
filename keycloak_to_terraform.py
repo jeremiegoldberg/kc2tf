@@ -666,19 +666,26 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
             # Nettoyer le nom pour le nom de ressource
             resource_name = name.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
             
+            # Échapper les guillemets dans les chaînes
+            escaped_name = name.replace('"', '\\"').replace("'", "\\'")
+            escaped_description = description.replace('"', '\\"').replace("'", "\\'")
+            escaped_protocol = protocol.replace('"', '\\"').replace("'", "\\'")
+            
             config += f'''
 resource "keycloak_openid_client_scope" "{resource_name}" {{
   realm_id    = keycloak_realm.{self.get_realm_resource_name()}.id
-  name        = "{name}"
-  description = "{description}"
-  protocol    = "{protocol}"
+  name        = "{escaped_name}"
+  description = "{escaped_description}"
+  protocol    = "{escaped_protocol}"
 '''
             
             # Ajouter les attributs si présents
             if attributes:
                 config += "  attributes = {\n"
                 for key, value in attributes.items():
-                    config += f'    "{key}" = "{value}"\n'
+                    escaped_key = key.replace('"', '\\"').replace("'", "\\'")
+                    escaped_value = str(value).replace('"', '\\"').replace("'", "\\'")
+                    config += f'    "{escaped_key}" = "{escaped_value}"\n'
                 config += "  }\n"
             
             config += "}\n"
@@ -693,13 +700,18 @@ resource "keycloak_openid_client_scope" "{resource_name}" {{
                     mapper_resource_name = mapper_name.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
                     mapper_resource_name = f"{resource_name}_{mapper_resource_name}_{i}"
                     
+                    # Échapper les guillemets dans les chaînes du mapper
+                    escaped_mapper_name = mapper_name.replace('"', '\\"').replace("'", "\\'")
+                    escaped_protocol = mapper.get('protocol', 'openid-connect').replace('"', '\\"').replace("'", "\\'")
+                    escaped_protocol_mapper = mapper.get('protocolMapper', 'oidc-usermodel-attribute-mapper').replace('"', '\\"').replace("'", "\\'")
+                    
                     config += f'''
 resource "keycloak_openid_client_scope_protocol_mapper" "{mapper_resource_name}" {{
   realm_id        = keycloak_realm.{self.get_realm_resource_name()}.id
   client_scope_id = keycloak_openid_client_scope.{resource_name}.id
-  name            = "{mapper_name}"
-  protocol        = "{mapper.get('protocol', 'openid-connect')}"
-  protocol_mapper = "{mapper.get('protocolMapper', 'oidc-usermodel-attribute-mapper')}"
+  name            = "{escaped_mapper_name}"
+  protocol        = "{escaped_protocol}"
+  protocol_mapper = "{escaped_protocol_mapper}"
   
   config = {{
 '''
@@ -707,7 +719,9 @@ resource "keycloak_openid_client_scope_protocol_mapper" "{mapper_resource_name}"
                     # Ajouter la configuration du mapper
                     mapper_config = mapper.get('config', {})
                     for key, value in mapper_config.items():
-                        config += f'    "{key}" = "{value}"\n'
+                        escaped_key = key.replace('"', '\\"').replace("'", "\\'")
+                        escaped_value = str(value).replace('"', '\\"').replace("'", "\\'")
+                        config += f'    "{escaped_key}" = "{escaped_value}"\n'
                     
                     config += "  }\n}\n"
         
