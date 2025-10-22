@@ -390,6 +390,46 @@ resource "keycloak_openid_client" "{client_resource_name}" {{
             if web_origins and (standard_flow_enabled or implicit_flow_enabled):
                 config += f'  web_origins = {json.dumps(web_origins)}\n'
             
+            # Gestion des attributs ACR to LOA et authentication flow binding overrides via extra_config
+            attributes = client.get('attributes', {})
+            acr_loa_map = attributes.get('acr.loa.map', '')
+            acr_loa_default = attributes.get('acr.loa.map.default', '')
+            acr_loa_force = attributes.get('acr.loa.map.force', '')
+            
+            # Authentication flow binding overrides
+            auth_flow_overrides = client.get('authenticationFlowBindingOverrides', {})
+            
+            # Ajouter les attributs via extra_config s'ils existent
+            if acr_loa_map or acr_loa_default or acr_loa_force or auth_flow_overrides:
+                config += '\n  # Configuration avancée (ACR to LOA mapping et authentication flow overrides)\n'
+                config += '  extra_config = {\n'
+                
+                # ACR to LOA mappings
+                if acr_loa_map:
+                    try:
+                        # Parser le JSON et le reformater pour Terraform
+                        import json
+                        acr_loa_dict = json.loads(acr_loa_map)
+                        config += f'    "acr.loa.map" = "{json.dumps(acr_loa_dict)}"\n'
+                    except json.JSONDecodeError:
+                        # Si le parsing échoue, utiliser la valeur brute
+                        config += f'    "acr.loa.map" = "{acr_loa_map}"\n'
+                
+                if acr_loa_default:
+                    config += f'    "acr.loa.map.default" = "{acr_loa_default}"\n'
+                
+                if acr_loa_force:
+                    config += f'    "acr.loa.map.force" = "{acr_loa_force.lower()}"\n'
+                
+                # Authentication flow binding overrides
+                if auth_flow_overrides:
+                    for flow_type, flow_alias in auth_flow_overrides.items():
+                        # Nettoyer le nom du flow pour la référence Terraform
+                        flow_resource_name = flow_alias.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
+                        config += f'    "authentication.flow.binding.{flow_type}" = "keycloak_authentication_flow.{flow_resource_name}.alias"\n'
+                
+                config += '  }\n'
+            
             config += "}\n"
             
             # Scopes par défaut
