@@ -41,11 +41,15 @@ class KeycloakToTerraform:
             'default_groups': [
             ],
             
-            # Scopes par défaut créés automatiquement
-            'default_scopes': [
+            # Scopes OpenID Connect par défaut créés automatiquement
+            'default_oidc_scopes': [
                 'acr', 'web-origins', 'profile', 'roles', 'email', 
-                'address', 'phone', 'offline_access', 'microprofile-jwt',
-                'role_list'  # Scope builtin
+                'address', 'phone', 'offline_access', 'microprofile-jwt'
+            ],
+            
+            # Scopes SAML par défaut créés automatiquement
+            'default_saml_scopes': [
+                'role_list'  # Scope SAML builtin
             ],
             
             # Flows d'authentification par défaut créés automatiquement
@@ -101,7 +105,13 @@ class KeycloakToTerraform:
         elif object_type == 'group':
             return clean_name in [g.lower() for g in self.auto_created_objects['default_groups']]
         elif object_type == 'scope':
-            return clean_name in [s.lower() for s in self.auto_created_objects['default_scopes']]
+            # Vérifier les scopes OpenID Connect par défaut
+            if clean_name in [s.lower() for s in self.auto_created_objects['default_oidc_scopes']]:
+                return True
+            # Vérifier les scopes SAML par défaut
+            if clean_name in [s.lower() for s in self.auto_created_objects['default_saml_scopes']]:
+                return True
+            return False
         elif object_type == 'flow':
             return clean_name in [f.lower() for f in self.auto_created_objects['default_flows']]
         elif object_type == 'mapper':
@@ -516,12 +526,23 @@ data "keycloak_group" "{group_resource_name}" {{
 }}
 '''
         
-        # Data sources pour les scopes par défaut
-        config += "\n# Data sources pour les scopes automatiquement créés par Keycloak\n"
-        for scope in self.auto_created_objects['default_scopes']:
+        # Data sources pour les scopes OpenID Connect par défaut
+        config += "\n# Data sources pour les scopes OpenID Connect automatiquement créés par Keycloak\n"
+        for scope in self.auto_created_objects['default_oidc_scopes']:
             scope_resource_name = scope.replace('-', '_').replace(' ', '_')
             config += f'''
 data "keycloak_openid_client_scope" "default_scope_{scope_resource_name}" {{
+  realm_id = keycloak_realm.{self.get_realm_resource_name()}.id
+  name     = "{scope}"
+}}
+'''
+        
+        # Data sources pour les scopes SAML par défaut
+        config += "\n# Data sources pour les scopes SAML automatiquement créés par Keycloak\n"
+        for scope in self.auto_created_objects['default_saml_scopes']:
+            scope_resource_name = scope.replace('-', '_').replace(' ', '_')
+            config += f'''
+data "keycloak_saml_client_scope" "default_scope_{scope_resource_name}" {{
   realm_id = keycloak_realm.{self.get_realm_resource_name()}.id
   name     = "{scope}"
 }}
@@ -642,7 +663,7 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
         return config
 
     def generate_client_scopes_config(self) -> str:
-        """Génère la configuration des scopes de clients OpenID Connect uniquement"""
+        """Génère la configuration des scopes de clients (OpenID Connect et SAML)"""
         if not self.realm_data or 'clientScopes' not in self.realm_data:
             return ""
         
@@ -659,13 +680,8 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
                 self.log_debug(f"Scope '{name}' ignoré (créé automatiquement par Keycloak)")
                 continue
             
-            # Filtrer les scopes SAML - ne générer que les scopes OpenID Connect
-            protocol = scope.get('protocol', 'openid-connect')
-            if protocol != 'openid-connect':
-                self.log_debug(f"Scope '{name}' ignoré (protocole {protocol}, seuls les scopes OpenID Connect sont supportés)")
-                continue
-            
             description = scope.get('description', '')
+            protocol = scope.get('protocol', 'openid-connect')
             protocol_mappers = scope.get('protocolMappers', [])
             
             # Nettoyer le nom pour le nom de ressource
@@ -675,14 +691,30 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
             escaped_name = name.replace('"', '\\"').replace("'", "\\'")
             escaped_description = description.replace('"', '\\"').replace("'", "\\'")
             
-            config += f'''
+            if protocol == 'openid-connect':
+                # Scope OpenID Connect
+                config += f'''
 resource "keycloak_openid_client_scope" "{resource_name}" {{
   realm_id    = keycloak_realm.{self.get_realm_resource_name()}.id
   name        = "{escaped_name}"
   description = "{escaped_description}"
 '''
-            
-            config += "}\n"
+                config += "}\n"
+                
+            elif protocol == 'saml':
+                # Scope SAML
+                config += f'''
+resource "keycloak_saml_client_scope" "{resource_name}" {{
+  realm_id    = keycloak_realm.{self.get_realm_resource_name()}.id
+  name        = "{escaped_name}"
+  description = "{escaped_description}"
+'''
+                config += "}\n"
+                
+            else:
+                # Protocole non supporté
+                self.log_debug(f"Scope '{name}' ignoré (protocole {protocol} non supporté)")
+                continue
             
             # Note: Les protocol mappers ne sont pas supportés par le provider keycloak/keycloak
             # Ils doivent être configurés manuellement dans Keycloak
