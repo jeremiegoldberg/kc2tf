@@ -640,6 +640,79 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
         
         return config
 
+    def generate_client_scopes_config(self) -> str:
+        """Génère la configuration des scopes de clients"""
+        if not self.realm_data or 'clientScopes' not in self.realm_data:
+            return ""
+        
+        config = ""
+        client_scopes = self.realm_data['clientScopes']
+        
+        for scope in client_scopes:
+            name = scope.get('name', '')
+            if not name or name.strip() == '':
+                continue
+            
+            # Exclure les scopes par défaut
+            if self.is_auto_created_object(name, 'scope'):
+                self.log_debug(f"Scope '{name}' ignoré (créé automatiquement par Keycloak)")
+                continue
+            
+            description = scope.get('description', '')
+            protocol = scope.get('protocol', 'openid-connect')
+            attributes = scope.get('attributes', {})
+            protocol_mappers = scope.get('protocolMappers', [])
+            
+            # Nettoyer le nom pour le nom de ressource
+            resource_name = name.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
+            
+            config += f'''
+resource "keycloak_openid_client_scope" "{resource_name}" {{
+  realm_id    = keycloak_realm.{self.get_realm_resource_name()}.id
+  name        = "{name}"
+  description = "{description}"
+  protocol    = "{protocol}"
+'''
+            
+            # Ajouter les attributs si présents
+            if attributes:
+                config += "  attributes = {\n"
+                for key, value in attributes.items():
+                    config += f'    "{key}" = "{value}"\n'
+                config += "  }\n"
+            
+            config += "}\n"
+            
+            # Générer les protocol mappers pour ce scope
+            if protocol_mappers:
+                for i, mapper in enumerate(protocol_mappers):
+                    mapper_name = mapper.get('name', '')
+                    if not mapper_name:
+                        continue
+                    
+                    mapper_resource_name = mapper_name.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
+                    mapper_resource_name = f"{resource_name}_{mapper_resource_name}_{i}"
+                    
+                    config += f'''
+resource "keycloak_openid_client_scope_protocol_mapper" "{mapper_resource_name}" {{
+  realm_id        = keycloak_realm.{self.get_realm_resource_name()}.id
+  client_scope_id = keycloak_openid_client_scope.{resource_name}.id
+  name            = "{mapper_name}"
+  protocol        = "{mapper.get('protocol', 'openid-connect')}"
+  protocol_mapper = "{mapper.get('protocolMapper', 'oidc-usermodel-attribute-mapper')}"
+  
+  config = {{
+'''
+                    
+                    # Ajouter la configuration du mapper
+                    mapper_config = mapper.get('config', {})
+                    for key, value in mapper_config.items():
+                        config += f'    "{key}" = "{value}"\n'
+                    
+                    config += "  }\n}\n"
+        
+        return config
+
     def generate_authentication_flows_config(self) -> str:
         """Génère la configuration des flows d'authentification"""
         if not self.realm_data or 'authenticationFlows' not in self.realm_data:
@@ -891,6 +964,9 @@ resource "keycloak_authentication_execution_config" "{resource_name}" {{
         # Fournisseurs d'identité
         idps_config = self.generate_identity_providers_config()
         
+        # Scopes de clients
+        client_scopes_config = self.generate_client_scopes_config()
+        
         # Flows d'authentification
         auth_flows_config = self.generate_authentication_flows_config()
         
@@ -925,6 +1001,9 @@ resource "keycloak_authentication_execution_config" "{resource_name}" {{
         with open(f"{self.output_dir}/identity_providers.tf", "w", encoding="utf-8") as f:
             f.write(self.replace_variables(idps_config))
         
+        with open(f"{self.output_dir}/client_scopes.tf", "w", encoding="utf-8") as f:
+            f.write(self.replace_variables(client_scopes_config))
+        
         with open(f"{self.output_dir}/authentication_flows.tf", "w", encoding="utf-8") as f:
             f.write(self.replace_variables(auth_flows_config))
         
@@ -946,6 +1025,7 @@ resource "keycloak_authentication_execution_config" "{resource_name}" {{
         print("   - groups.tf")
         print("   - users.tf")
         print("   - identity_providers.tf")
+        print("   - client_scopes.tf")
         print("   - authentication_flows.tf")
         print("   - authentication_executions.tf")
         print("   - authenticator_configs.tf")
