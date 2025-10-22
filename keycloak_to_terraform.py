@@ -414,11 +414,11 @@ resource "keycloak_openid_client" "{client_resource_name}" {{
                 
                 config += '  }\n'
             
-            # Authentication flow binding overrides (attribut spécifique du provider)
+            # Authentication flow binding overrides (bloc spécifique du provider)
             auth_flow_overrides = client.get('authenticationFlowBindingOverrides', {})
             if auth_flow_overrides:
                 config += '\n  # Authentication flow binding overrides\n'
-                config += '  authentication_flow_binding_overrides = {\n'
+                config += '  authentication_flow_binding_overrides {\n'
                 for flow_type, flow_alias in auth_flow_overrides.items():
                     config += f'    {flow_type} = "{flow_alias}"\n'
                 config += '  }\n'
