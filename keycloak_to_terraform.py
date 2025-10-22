@@ -690,40 +690,10 @@ resource "keycloak_openid_client_scope" "{resource_name}" {{
             
             config += "}\n"
             
-            # Générer les protocol mappers pour ce scope
+            # Note: Les protocol mappers ne sont pas supportés par le provider keycloak/keycloak
+            # Ils doivent être configurés manuellement dans Keycloak
             if protocol_mappers:
-                for i, mapper in enumerate(protocol_mappers):
-                    mapper_name = mapper.get('name', '')
-                    if not mapper_name:
-                        continue
-                    
-                    mapper_resource_name = mapper_name.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
-                    mapper_resource_name = f"{resource_name}_{mapper_resource_name}_{i}"
-                    
-                    # Échapper les guillemets dans les chaînes du mapper
-                    escaped_mapper_name = mapper_name.replace('"', '\\"').replace("'", "\\'")
-                    escaped_protocol = mapper.get('protocol', 'openid-connect').replace('"', '\\"').replace("'", "\\'")
-                    escaped_protocol_mapper = mapper.get('protocolMapper', 'oidc-usermodel-attribute-mapper').replace('"', '\\"').replace("'", "\\'")
-                    
-                    config += f'''
-resource "keycloak_openid_client_scope_protocol_mapper" "{mapper_resource_name}" {{
-  realm_id        = keycloak_realm.{self.get_realm_resource_name()}.id
-  client_scope_id = keycloak_openid_client_scope.{resource_name}.id
-  name            = "{escaped_mapper_name}"
-  protocol        = "{escaped_protocol}"
-  protocol_mapper = "{escaped_protocol_mapper}"
-  
-  config = {{
-'''
-                    
-                    # Ajouter la configuration du mapper
-                    mapper_config = mapper.get('config', {})
-                    for key, value in mapper_config.items():
-                        escaped_key = key.replace('"', '\\"').replace("'", "\\'")
-                        escaped_value = str(value).replace('"', '\\"').replace("'", "\\'")
-                        config += f'    "{escaped_key}" = "{escaped_value}"\n'
-                    
-                    config += "  }\n}\n"
+                self.log_debug(f"Scope '{name}' a {len(protocol_mappers)} protocol mappers (non supportés par le provider)")
         
         return config
 
