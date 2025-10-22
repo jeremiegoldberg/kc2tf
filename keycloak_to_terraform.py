@@ -659,8 +659,6 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
                 continue
             
             description = scope.get('description', '')
-            protocol = scope.get('protocol', 'openid-connect')
-            attributes = scope.get('attributes', {})
             protocol_mappers = scope.get('protocolMappers', [])
             
             # Nettoyer le nom pour le nom de ressource
@@ -669,24 +667,13 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
             # Échapper les guillemets dans les chaînes
             escaped_name = name.replace('"', '\\"').replace("'", "\\'")
             escaped_description = description.replace('"', '\\"').replace("'", "\\'")
-            escaped_protocol = protocol.replace('"', '\\"').replace("'", "\\'")
             
             config += f'''
 resource "keycloak_openid_client_scope" "{resource_name}" {{
   realm_id    = keycloak_realm.{self.get_realm_resource_name()}.id
   name        = "{escaped_name}"
   description = "{escaped_description}"
-  protocol    = "{escaped_protocol}"
 '''
-            
-            # Ajouter les attributs si présents
-            if attributes:
-                config += "  attributes = {\n"
-                for key, value in attributes.items():
-                    escaped_key = key.replace('"', '\\"').replace("'", "\\'")
-                    escaped_value = str(value).replace('"', '\\"').replace("'", "\\'")
-                    config += f'    "{escaped_key}" = "{escaped_value}"\n'
-                config += "  }\n"
             
             config += "}\n"
             
