@@ -406,13 +406,9 @@ resource "keycloak_openid_client" "{client_resource_name}" {{
                 
                 # ACR to LOA mappings
                 if acr_loa_map:
-                    try:
-                        # Parser le JSON et le reformater pour Terraform
-                        acr_loa_dict = json.loads(acr_loa_map)
-                        config += f'    "acr.loa.map" = "{json.dumps(acr_loa_dict)}"\n'
-                    except json.JSONDecodeError:
-                        # Si le parsing échoue, utiliser la valeur brute
-                        config += f'    "acr.loa.map" = "{acr_loa_map}"\n'
+                    # Échapper correctement les guillemets pour Terraform
+                    escaped_acr_loa_map = acr_loa_map.replace('"', '\\"')
+                    config += f'    "acr.loa.map" = "{escaped_acr_loa_map}"\n'
                 
                 if acr_loa_default:
                     config += f'    "acr.loa.map.default" = "{acr_loa_default}"\n'
