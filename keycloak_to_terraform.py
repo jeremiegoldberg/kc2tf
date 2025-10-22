@@ -44,7 +44,8 @@ class KeycloakToTerraform:
             # Scopes par défaut créés automatiquement
             'default_scopes': [
                 'acr', 'web-origins', 'profile', 'roles', 'email', 
-                'address', 'phone', 'offline_access', 'microprofile-jwt'
+                'address', 'phone', 'offline_access', 'microprofile-jwt',
+                'role_list'  # Scope builtin
             ],
             
             # Flows d'authentification par défaut créés automatiquement
@@ -641,7 +642,7 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
         return config
 
     def generate_client_scopes_config(self) -> str:
-        """Génère la configuration des scopes de clients"""
+        """Génère la configuration des scopes de clients OpenID Connect uniquement"""
         if not self.realm_data or 'clientScopes' not in self.realm_data:
             return ""
         
@@ -656,6 +657,12 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
             # Exclure les scopes par défaut
             if self.is_auto_created_object(name, 'scope'):
                 self.log_debug(f"Scope '{name}' ignoré (créé automatiquement par Keycloak)")
+                continue
+            
+            # Filtrer les scopes SAML - ne générer que les scopes OpenID Connect
+            protocol = scope.get('protocol', 'openid-connect')
+            if protocol != 'openid-connect':
+                self.log_debug(f"Scope '{name}' ignoré (protocole {protocol}, seuls les scopes OpenID Connect sont supportés)")
                 continue
             
             description = scope.get('description', '')
