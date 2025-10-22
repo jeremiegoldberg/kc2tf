@@ -715,6 +715,7 @@ resource "keycloak_authentication_subflow" "{resource_name}" {{
             
             # Nettoyer le nom pour le nom de ressource
             flow_resource_name = alias.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
+            top_level = flow.get('topLevel', True)
             
             for i, execution in enumerate(executions):
                 authenticator = execution.get('authenticator', '')
@@ -728,12 +729,16 @@ resource "keycloak_authentication_subflow" "{resource_name}" {{
                 authenticator_resource_name = authenticator.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
                 execution_resource_name = f"{flow_resource_name}_{authenticator_resource_name}_{i}"
                 
+                # Déterminer la ressource parente correcte
                 if flow_alias:
-                    # Exécution dans un subflow
+                    # Exécution dans un subflow - utiliser le flow parent
                     parent_flow_alias = f"keycloak_authentication_subflow.{flow_resource_name}.alias"
-                else:
+                elif top_level:
                     # Exécution dans un flow principal
                     parent_flow_alias = f"keycloak_authentication_flow.{flow_resource_name}.alias"
+                else:
+                    # Exécution dans un subflow
+                    parent_flow_alias = f"keycloak_authentication_subflow.{flow_resource_name}.alias"
                 
                 config += f'''
 resource "keycloak_authentication_execution" "{execution_resource_name}" {{
