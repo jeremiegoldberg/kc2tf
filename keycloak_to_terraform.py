@@ -341,10 +341,12 @@ resource "keycloak_openid_client" "{client_resource_name}" {{
   service_accounts_enabled     = {str(service_accounts_enabled).lower()}
 '''
             
-            if redirect_uris:
+            # Ne générer valid_redirect_uris que si standard_flow ou implicit_flow est activé
+            if redirect_uris and (standard_flow_enabled or implicit_flow_enabled):
                 config += f'  valid_redirect_uris = {json.dumps(redirect_uris)}\n'
             
-            if web_origins:
+            # Ne générer web_origins que si standard_flow ou implicit_flow est activé
+            if web_origins and (standard_flow_enabled or implicit_flow_enabled):
                 config += f'  web_origins = {json.dumps(web_origins)}\n'
             
             config += "}\n"
@@ -542,6 +544,11 @@ data "keycloak_openid_client_scope" "default_scope_{scope_resource_name}" {{
         for user in users:
             username = user.get('username', '')
             if not username or username.strip() == '':
+                continue
+            
+            # Exclure les comptes de service automatiquement créés par Keycloak
+            if username.startswith('service-account-'):
+                self.log_debug(f"Utilisateur '{username}' ignoré (compte de service automatiquement créé)")
                 continue
             
             first_name = user.get('firstName', '')
