@@ -86,7 +86,17 @@ class KeycloakToTerraform:
         if object_type == 'client':
             return clean_name in [c.lower() for c in self.auto_created_objects['default_clients']]
         elif object_type == 'role':
-            return clean_name in [r.lower() for r in self.auto_created_objects['default_roles']]
+            # Vérifier les rôles par défaut
+            if clean_name in [r.lower() for r in self.auto_created_objects['default_roles']]:
+                return True
+            
+            # Vérifier le pattern default-roles-{realm_name}
+            if self.realm_data and 'realm' in self.realm_data:
+                realm_name = self.realm_data['realm'].lower()
+                if clean_name == f'default-roles-{realm_name}':
+                    return True
+            
+            return False
         elif object_type == 'group':
             return clean_name in [g.lower() for g in self.auto_created_objects['default_groups']]
         elif object_type == 'scope':
@@ -480,6 +490,18 @@ data "keycloak_role" "realm_role_{role_resource_name}" {{
 }}
 '''
         
+        # Ajouter le rôle default-roles-{realm_name} si le realm est défini
+        if self.realm_data and 'realm' in self.realm_data:
+            realm_name = self.realm_data['realm']
+            default_roles_realm = f'default-roles-{realm_name}'
+            role_resource_name = default_roles_realm.replace('-', '_').replace(' ', '_')
+            config += f'''
+data "keycloak_role" "realm_role_{role_resource_name}" {{
+  realm_id = keycloak_realm.{self.get_realm_resource_name()}.id
+  name     = "{default_roles_realm}"
+}}
+'''
+        
         # Data sources pour les groupes par défaut
         config += "\n# Data sources pour les groupes automatiquement créés par Keycloak\n"
         for group in self.auto_created_objects['default_groups']:
@@ -511,6 +533,11 @@ data "keycloak_openid_client_scope" "default_scope_{scope_resource_name}" {{
         
         config = ""
         users = self.realm_data['users']
+        
+        # Vérifier s'il y a des utilisateurs dans l'export
+        if not users or len(users) == 0:
+            self.log_debug("Aucun utilisateur trouvé dans l'export - aucun utilisateur généré")
+            return ""
         
         for user in users:
             username = user.get('username', '')
