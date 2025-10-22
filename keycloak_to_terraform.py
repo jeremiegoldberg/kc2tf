@@ -680,11 +680,14 @@ resource "keycloak_authentication_flow" "{resource_name}" {{
                 parent_flow_alias = flow.get('parentFlowAlias', '')
                 requirement = flow.get('requirement', 'REQUIRED')
                 
+                # Nettoyer le nom du flow parent pour la référence
+                parent_flow_resource_name = parent_flow_alias.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
+                
                 config += f'''
 resource "keycloak_authentication_subflow" "{resource_name}" {{
   realm_id           = keycloak_realm.{self.get_realm_resource_name()}.id
   alias              = "{alias}"
-  parent_flow_alias  = "{parent_flow_alias}"
+  parent_flow_alias  = keycloak_authentication_flow.{parent_flow_resource_name}.alias
   requirement        = "{requirement}"
   provider_id        = "{provider_id}"
 }}
