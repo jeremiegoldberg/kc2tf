@@ -740,6 +740,11 @@ resource "keycloak_authentication_subflow" "{resource_name}" {{
                     # Exécution dans un subflow
                     parent_flow_alias = f"keycloak_authentication_subflow.{flow_resource_name}.alias"
                 
+                # Vérifier que parent_flow_alias n'est pas vide
+                if not parent_flow_alias or parent_flow_alias.strip() == '':
+                    self.log_debug(f"Exécution '{authenticator}' ignorée (parent_flow_alias vide)")
+                    continue
+                
                 config += f'''
 resource "keycloak_authentication_execution" "{execution_resource_name}" {{
   realm_id           = keycloak_realm.{self.get_realm_resource_name()}.id
