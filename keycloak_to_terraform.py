@@ -320,9 +320,10 @@ resource "keycloak_openid_client_optional_scopes" "{client_resource_name}_option
 resource "keycloak_role" "{resource_name}" {{
         realm_id    = keycloak_realm.{self.get_realm_resource_name()}.id
   name        = "{role_name}"
-  description = "{description}"
-}}
 '''
+                if description and description.strip():
+                    config += f'  description = "{description}"\n'
+                config += "}\n"
         
         return config
     
@@ -443,6 +444,14 @@ resource "keycloak_user" "{resource_name}" {{
             if not display_name or display_name.strip() == '':
                 display_name = alias
             
+            # Récupérer les valeurs de configuration
+            config_data = idp.get('config', {})
+            authorization_url = config_data.get('authorizationUrl', 'https://example.com/auth')
+            token_url = config_data.get('tokenUrl', 'https://example.com/token')
+            client_id = config_data.get('clientId', '')
+            client_secret = config_data.get('clientSecret', '')
+            default_scopes = config_data.get('defaultScope', 'openid')
+            
             config += f'''
 resource "keycloak_oidc_identity_provider" "{alias}" {{
         realm             = keycloak_realm.{self.get_realm_resource_name()}.id
@@ -452,13 +461,17 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
   access_type        = "PUBLIC"
   
   # Configuration OIDC
-  authorization_url = "{idp.get('config', {}).get('authorizationUrl', 'https://example.com/auth')}"
-  token_url         = "{idp.get('config', {}).get('tokenUrl', 'https://example.com/token')}"
-  client_id         = "{idp.get('config', {}).get('clientId', '')}"
-  client_secret     = "{idp.get('config', {}).get('clientSecret', '')}"
-  default_scopes    = "{idp.get('config', {}).get('defaultScope', 'openid')}"
-}}
+  authorization_url = "{authorization_url}"
+  token_url         = "{token_url}"
 '''
+            if client_id:
+                config += f'  client_id         = "{client_id}"\n'
+            if client_secret:
+                config += f'  client_secret     = "{client_secret}"\n'
+            if default_scopes:
+                config += f'  default_scopes    = "{default_scopes}"\n'
+            
+            config += "}\n"
         
         return config
     
