@@ -62,9 +62,9 @@ class KeycloakToTerraform:
                             break
                     else:
                         # Rôle non trouvé, remplacer par une chaîne vide
-                        content = content.replace(f'${{{variable}}}', '""')
+                        content = content.replace(f'${{{variable}}}', '')
                 else:
-                    content = content.replace(f'${{{variable}}}', '""')
+                    content = content.replace(f'${{{variable}}}', '')
             
             elif variable.startswith('client_'):
                 # Variable de client
@@ -80,9 +80,9 @@ class KeycloakToTerraform:
                             break
                     else:
                         # Client non trouvé, remplacer par une chaîne vide
-                        content = content.replace(f'${{{variable}}}', '""')
+                        content = content.replace(f'${{{variable}}}', '')
                 else:
-                    content = content.replace(f'${{{variable}}}', '""')
+                    content = content.replace(f'${{{variable}}}', '')
             
             elif variable.startswith('group_'):
                 # Variable de groupe
@@ -99,9 +99,9 @@ class KeycloakToTerraform:
                             break
                     else:
                         # Groupe non trouvé, remplacer par une chaîne vide
-                        content = content.replace(f'${{{variable}}}', '""')
+                        content = content.replace(f'${{{variable}}}', '')
                 else:
-                    content = content.replace(f'${{{variable}}}', '""')
+                    content = content.replace(f'${{{variable}}}', '')
             
             elif variable.startswith('user_'):
                 # Variable d'utilisateur
@@ -117,13 +117,13 @@ class KeycloakToTerraform:
                             break
                     else:
                         # Utilisateur non trouvé, remplacer par une chaîne vide
-                        content = content.replace(f'${{{variable}}}', '""')
+                        content = content.replace(f'${{{variable}}}', '')
                 else:
-                    content = content.replace(f'${{{variable}}}', '""')
+                    content = content.replace(f'${{{variable}}}', '')
             
             else:
                 # Variable inconnue, remplacer par une chaîne vide
-                content = content.replace(f'${{{variable}}}', '""')
+                content = content.replace(f'${{{variable}}}', '')
         
         return content
     
