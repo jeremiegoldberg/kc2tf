@@ -420,14 +420,8 @@ resource "keycloak_openid_client" "{client_resource_name}" {{
                 config += '\n  # Authentication flow binding overrides\n'
                 config += '  authentication_flow_binding_overrides {\n'
                 for flow_type, flow_alias in auth_flow_overrides.items():
-                    # Mapper les types de flow vers les noms d'attributs corrects
-                    if flow_type == 'browser':
-                        config += f'    browser_flow = "{flow_alias}"\n'
-                    elif flow_type == 'direct_grant':
-                        config += f'    direct_grant_flow = "{flow_alias}"\n'
-                    else:
-                        # Pour d'autres types de flow, utiliser le nom tel quel
-                        config += f'    {flow_type} = "{flow_alias}"\n'
+                    # Utiliser les noms d'attributs corrects selon la documentation
+                    config += f'    {flow_type} = "{flow_alias}"\n'
                 config += '  }\n'
             
             config += "}\n"
