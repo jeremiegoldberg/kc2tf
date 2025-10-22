@@ -34,8 +34,7 @@ class KeycloakToTerraform:
             
             # Rôles par défaut créés automatiquement
             'default_roles': [
-                'offline_access', 'uma_authorization', 'default-roles-bcregistry', 
-                'realm-viewer', 'realm-admin'
+                'offline_access', 'uma_authorization'
             ],
             
             # Groupes par défaut créés automatiquement
