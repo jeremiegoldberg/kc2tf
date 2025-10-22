@@ -639,6 +639,146 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
             config += "}\n"
         
         return config
+
+    def generate_authentication_flows_config(self) -> str:
+        """Génère la configuration des flows d'authentification"""
+        if not self.realm_data or 'authenticationFlows' not in self.realm_data:
+            return ""
+        
+        config = ""
+        flows = self.realm_data['authenticationFlows']
+        
+        for flow in flows:
+            alias = flow.get('alias', '')
+            if not alias or alias.strip() == '':
+                continue
+            
+            # Exclure les flows par défaut
+            if self.is_auto_created_object(alias, 'flow'):
+                self.log_debug(f"Flow '{alias}' ignoré (créé automatiquement par Keycloak)")
+                continue
+            
+            description = flow.get('description', '')
+            provider_id = flow.get('providerId', 'basic-flow')
+            top_level = flow.get('topLevel', True)
+            
+            # Nettoyer le nom pour le nom de ressource
+            resource_name = alias.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
+            
+            if top_level:
+                # Flow principal
+                config += f'''
+resource "keycloak_authentication_flow" "{resource_name}" {{
+  realm_id    = keycloak_realm.{self.get_realm_resource_name()}.id
+  alias       = "{alias}"
+  description = "{description}"
+  provider_id = "{provider_id}"
+}}
+'''
+            else:
+                # Subflow
+                parent_flow_alias = flow.get('parentFlowAlias', '')
+                requirement = flow.get('requirement', 'REQUIRED')
+                
+                config += f'''
+resource "keycloak_authentication_subflow" "{resource_name}" {{
+  realm_id           = keycloak_realm.{self.get_realm_resource_name()}.id
+  alias              = "{alias}"
+  parent_flow_alias  = "{parent_flow_alias}"
+  requirement        = "{requirement}"
+  provider_id        = "{provider_id}"
+}}
+'''
+        
+        return config
+
+    def generate_authentication_executions_config(self) -> str:
+        """Génère la configuration des exécutions d'authentification"""
+        if not self.realm_data or 'authenticationFlows' not in self.realm_data:
+            return ""
+        
+        config = ""
+        flows = self.realm_data['authenticationFlows']
+        
+        for flow in flows:
+            alias = flow.get('alias', '')
+            if not alias or alias.strip() == '':
+                continue
+            
+            # Exclure les flows par défaut
+            if self.is_auto_created_object(alias, 'flow'):
+                continue
+            
+            executions = flow.get('authenticationExecutions', [])
+            if not executions:
+                continue
+            
+            # Nettoyer le nom pour le nom de ressource
+            flow_resource_name = alias.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
+            
+            for i, execution in enumerate(executions):
+                authenticator = execution.get('authenticator', '')
+                if not authenticator:
+                    continue
+                
+                requirement = execution.get('requirement', 'REQUIRED')
+                flow_alias = execution.get('flowAlias', '')
+                
+                # Nettoyer le nom de l'authenticator pour le nom de ressource
+                authenticator_resource_name = authenticator.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
+                execution_resource_name = f"{flow_resource_name}_{authenticator_resource_name}_{i}"
+                
+                if flow_alias:
+                    # Exécution dans un subflow
+                    parent_flow_alias = f"keycloak_authentication_subflow.{flow_resource_name}.alias"
+                else:
+                    # Exécution dans un flow principal
+                    parent_flow_alias = f"keycloak_authentication_flow.{flow_resource_name}.alias"
+                
+                config += f'''
+resource "keycloak_authentication_execution" "{execution_resource_name}" {{
+  realm_id           = keycloak_realm.{self.get_realm_resource_name()}.id
+  parent_flow_alias  = {parent_flow_alias}
+  authenticator      = "{authenticator}"
+  requirement        = "{requirement}"
+}}
+'''
+        
+        return config
+
+    def generate_authenticator_configs_config(self) -> str:
+        """Génère la configuration des configurations d'authenticateurs"""
+        if not self.realm_data or 'authenticatorConfig' not in self.realm_data:
+            return ""
+        
+        config = ""
+        authenticator_configs = self.realm_data['authenticatorConfig']
+        
+        for auth_config in authenticator_configs:
+            alias = auth_config.get('alias', '')
+            if not alias or alias.strip() == '':
+                continue
+            
+            config_data = auth_config.get('config', {})
+            if not config_data:
+                continue
+            
+            # Nettoyer le nom pour le nom de ressource
+            resource_name = alias.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
+            
+            config += f'''
+resource "keycloak_authentication_execution_config" "{resource_name}" {{
+  realm_id = keycloak_realm.{self.get_realm_resource_name()}.id
+  alias    = "{alias}"
+  config   = {{
+'''
+            
+            for key, value in config_data.items():
+                config += f'    "{key}" = "{value}"\n'
+            
+            config += "  }\n}\n"
+        
+        return config
     
     def generate_all_configs(self):
         """Génère toutes les configurations Terraform"""
@@ -665,6 +805,15 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
         # Fournisseurs d'identité
         idps_config = self.generate_identity_providers_config()
         
+        # Flows d'authentification
+        auth_flows_config = self.generate_authentication_flows_config()
+        
+        # Exécutions d'authentification
+        auth_executions_config = self.generate_authentication_executions_config()
+        
+        # Configurations d'authenticateurs
+        auth_configs_config = self.generate_authenticator_configs_config()
+        
         # Data sources pour les objets automatiquement créés
         auto_created_data_sources = self.generate_auto_created_data_sources()
         
@@ -690,6 +839,15 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
         with open(f"{self.output_dir}/identity_providers.tf", "w", encoding="utf-8") as f:
             f.write(self.replace_variables(idps_config))
         
+        with open(f"{self.output_dir}/authentication_flows.tf", "w", encoding="utf-8") as f:
+            f.write(self.replace_variables(auth_flows_config))
+        
+        with open(f"{self.output_dir}/authentication_executions.tf", "w", encoding="utf-8") as f:
+            f.write(self.replace_variables(auth_executions_config))
+        
+        with open(f"{self.output_dir}/authenticator_configs.tf", "w", encoding="utf-8") as f:
+            f.write(self.replace_variables(auth_configs_config))
+        
         with open(f"{self.output_dir}/auto_created_data_sources.tf", "w", encoding="utf-8") as f:
             f.write(self.replace_variables(auto_created_data_sources))
         
@@ -702,6 +860,9 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
         print("   - groups.tf")
         print("   - users.tf")
         print("   - identity_providers.tf")
+        print("   - authentication_flows.tf")
+        print("   - authentication_executions.tf")
+        print("   - authenticator_configs.tf")
         print("   - auto_created_data_sources.tf")
 
 def main():
