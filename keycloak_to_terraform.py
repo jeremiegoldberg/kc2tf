@@ -24,10 +24,84 @@ class KeycloakToTerraform:
         self.realm_data = None
         self.output_dir = "terraform_output"
         
+        # Objets automatiquement créés par Keycloak (ne pas recréer pour éviter les erreurs 409)
+        self.auto_created_objects = {
+            # Clients par défaut créés automatiquement
+            'default_clients': [
+                'account', 'account-console', 'admin-cli', 'broker', 
+                'realm-admin-cli', 'realm-management', 'realm-viewer-cli', 
+                'security-admin-console', 'terraform'
+            ],
+            
+            # Rôles par défaut créés automatiquement
+            'default_roles': [
+                'offline_access', 'uma_authorization', 'default-roles-bcregistry', 
+                'realm-viewer', 'realm-admin'
+            ],
+            
+            # Groupes par défaut créés automatiquement
+            'default_groups': [
+                'Realm Administrator'
+            ],
+            
+            # Scopes par défaut créés automatiquement
+            'default_scopes': [
+                'acr', 'web-origins', 'profile', 'roles', 'email', 
+                'address', 'phone', 'offline_access', 'microprofile-jwt', 'role_list'
+            ],
+            
+            # Flows d'authentification par défaut créés automatiquement
+            'default_flows': [
+                'browser', 'direct grant', 'registration', 'reset credentials', 
+                'clients', 'first broker login', 'docker auth', 'http challenge', 
+                'saml ecp', 'registration form', 'forms', 'Account verification options',
+                'User creation or linking', 'Reset - Conditional OTP', 
+                'First broker login - Conditional OTP', 'Browser - Conditional OTP',
+                'Account Verification Options', 'Direct Grant - Conditional OTP',
+                'Handle Existing Account', 'Verify Existing Account by Re-authentication',
+                'Authentication Options', 'Verify Existing Account by Re-authentication - auth-otp-form - Conditional'
+            ],
+            
+            # Mappers par défaut créés automatiquement
+            'default_mappers': [
+                'Client ID', 'Client IP Address', 'Client Host'
+            ],
+            
+            # Groupes d'utilisateurs publics créés automatiquement
+            'public_user_groups': [
+                'account_holders', 'public_users'
+            ]
+        }
+        
     def log_debug(self, message: str):
         """Affiche un message de debug si le mode debug est activé"""
         if self.debug:
             print(f"[DEBUG] {message}")
+    
+    def is_auto_created_object(self, name: str, object_type: str) -> bool:
+        """Vérifie si un objet est automatiquement créé par Keycloak"""
+        if not name or not object_type:
+            return False
+        
+        # Nettoyer le nom pour la comparaison
+        clean_name = name.lower().strip()
+        
+        if object_type == 'client':
+            return clean_name in [c.lower() for c in self.auto_created_objects['default_clients']]
+        elif object_type == 'role':
+            return clean_name in [r.lower() for r in self.auto_created_objects['default_roles']]
+        elif object_type == 'group':
+            return clean_name in [g.lower() for g in self.auto_created_objects['default_groups']]
+        elif object_type == 'scope':
+            return clean_name in [s.lower() for s in self.auto_created_objects['default_scopes']]
+        elif object_type == 'flow':
+            return clean_name in [f.lower() for f in self.auto_created_objects['default_flows']]
+        elif object_type == 'mapper':
+            return clean_name in [m.lower() for m in self.auto_created_objects['default_mappers']]
+        elif object_type == 'public_group':
+            return clean_name in [g.lower() for g in self.auto_created_objects['public_user_groups']]
+        
+        return False
     
     def clean_resource_name(self, name):
         """Nettoie un nom pour qu'il soit valide comme nom de ressource Terraform"""
@@ -204,12 +278,12 @@ provider "keycloak" {{
         config = ""
         clients = self.realm_data['clients']
         
-        # Clients par défaut à ignorer
-        default_clients = ['account', 'account-console', 'admin-cli', 'broker', 'realm-management']
-        
         for client in clients:
             client_id = client.get('clientId', '')
-            if client_id in default_clients:
+            
+            # Vérifier si c'est un client automatiquement créé par Keycloak
+            if self.is_auto_created_object(client_id, 'client'):
+                self.log_debug(f"Client '{client_id}' ignoré (créé automatiquement par Keycloak)")
                 continue
             
             name = client.get('name', '')
@@ -309,6 +383,11 @@ resource "keycloak_openid_client_optional_scopes" "{client_resource_name}_option
                 if not role_name or role_name.strip() == '':
                     continue
                 
+                # Vérifier si c'est un rôle automatiquement créé par Keycloak
+                if self.is_auto_created_object(role_name, 'role'):
+                    self.log_debug(f"Rôle '{role_name}' ignoré (créé automatiquement par Keycloak)")
+                    continue
+                
                 # S'assurer que la description n'est pas vide
                 if not description or description.strip() == '':
                     description = f"Role {role_name}"
@@ -344,6 +423,11 @@ resource "keycloak_role" "{resource_name}" {{
             if not group_name or group_name.strip() == '':
                 return ""
             
+            # Vérifier si c'est un groupe automatiquement créé par Keycloak
+            if self.is_auto_created_object(group_name, 'group') or self.is_auto_created_object(group_name, 'public_group'):
+                self.log_debug(f"Groupe '{group_name}' ignoré (créé automatiquement par Keycloak)")
+                return ""
+            
             # S'assurer que le path du groupe n'est pas vide
             if not group_path or group_path.strip() == '':
                 group_path = f"/{group_name}"
@@ -370,6 +454,56 @@ resource "keycloak_group" "{resource_name}" {{
         
         for group in groups:
             config += process_group(group)
+        
+        return config
+    
+    def generate_auto_created_data_sources(self) -> str:
+        """Génère des data sources pour les objets automatiquement créés par Keycloak"""
+        config = ""
+        
+        # Data sources pour les clients par défaut
+        config += "\n# Data sources pour les clients automatiquement créés par Keycloak\n"
+        for client in self.auto_created_objects['default_clients']:
+            client_resource_name = client.replace('-', '_').replace(' ', '_')
+            config += f'''
+data "keycloak_openid_client" "{client_resource_name}" {{
+  realm_id  = keycloak_realm.{self.get_realm_resource_name()}.id
+  client_id = "{client}"
+}}
+'''
+        
+        # Data sources pour les rôles par défaut
+        config += "\n# Data sources pour les rôles automatiquement créés par Keycloak\n"
+        for role in self.auto_created_objects['default_roles']:
+            role_resource_name = role.replace('-', '_').replace(' ', '_')
+            config += f'''
+data "keycloak_role" "realm_role_{role_resource_name}" {{
+  realm_id = keycloak_realm.{self.get_realm_resource_name()}.id
+  name     = "{role}"
+}}
+'''
+        
+        # Data sources pour les groupes par défaut
+        config += "\n# Data sources pour les groupes automatiquement créés par Keycloak\n"
+        for group in self.auto_created_objects['default_groups']:
+            group_resource_name = group.replace('-', '_').replace(' ', '_')
+            config += f'''
+data "keycloak_group" "{group_resource_name}" {{
+  realm_id = keycloak_realm.{self.get_realm_resource_name()}.id
+  name     = "{group}"
+}}
+'''
+        
+        # Data sources pour les scopes par défaut
+        config += "\n# Data sources pour les scopes automatiquement créés par Keycloak\n"
+        for scope in self.auto_created_objects['default_scopes']:
+            scope_resource_name = scope.replace('-', '_').replace(' ', '_')
+            config += f'''
+data "keycloak_openid_client_scope" "default_scope_{scope_resource_name}" {{
+  realm_id = keycloak_realm.{self.get_realm_resource_name()}.id
+  name     = "{scope}"
+}}
+'''
         
         return config
     
@@ -500,6 +634,9 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
         # Fournisseurs d'identité
         idps_config = self.generate_identity_providers_config()
         
+        # Data sources pour les objets automatiquement créés
+        auto_created_data_sources = self.generate_auto_created_data_sources()
+        
         # Écrire les fichiers avec remplacement des variables
         with open(f"{self.output_dir}/provider.tf", "w", encoding="utf-8") as f:
             f.write(self.replace_variables(provider_config))
@@ -522,6 +659,9 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
         with open(f"{self.output_dir}/identity_providers.tf", "w", encoding="utf-8") as f:
             f.write(self.replace_variables(idps_config))
         
+        with open(f"{self.output_dir}/auto_created_data_sources.tf", "w", encoding="utf-8") as f:
+            f.write(self.replace_variables(auto_created_data_sources))
+        
         print(f"✅ Configurations Terraform générées dans le répertoire '{self.output_dir}'")
         print("📁 Fichiers créés:")
         print("   - provider.tf")
@@ -531,6 +671,7 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
         print("   - groups.tf")
         print("   - users.tf")
         print("   - identity_providers.tf")
+        print("   - auto_created_data_sources.tf")
 
 def main():
     """Fonction principale"""
@@ -559,6 +700,10 @@ def main():
     print("2. Exécutez 'terraform init' dans le répertoire de sortie")
     print("3. Exécutez 'terraform plan' pour vérifier la configuration")
     print("4. Exécutez 'terraform apply' pour déployer")
+    print("\n⚠️  IMPORTANT:")
+    print("   • Les objets automatiquement créés par Keycloak sont exclus pour éviter les erreurs 409")
+    print("   • Ces objets sont disponibles via des data sources dans auto_created_data_sources.tf")
+    print("   • Seuls les objets personnalisés sont créés comme resources Terraform")
 
 if __name__ == "__main__":
     main()
