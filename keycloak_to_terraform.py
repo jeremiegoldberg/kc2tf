@@ -61,7 +61,12 @@ class KeycloakToTerraform:
                 'First broker login - Conditional OTP', 'Browser - Conditional OTP',
                 'Account Verification Options', 'Direct Grant - Conditional OTP',
                 'Handle Existing Account', 'Verify Existing Account by Re-authentication',
-                'Authentication Options', 'Verify Existing Account by Re-authentication - auth-otp-form - Conditional'
+                'Authentication Options', 'Verify Existing Account by Re-authentication - auth-otp-form - Conditional',
+                # Ajout de variantes communes
+                'browser-conditional-otp', 'browser_conditional_otp', 'browser conditional otp',
+                'direct-grant-conditional-otp', 'direct_grant_conditional_otp', 'direct grant conditional otp',
+                'first-broker-login-conditional-otp', 'first_broker_login_conditional_otp', 'first broker login conditional otp',
+                'reset-conditional-otp', 'reset_conditional_otp', 'reset conditional otp'
             ],
             
             # Mappers par défaut créés automatiquement
