@@ -757,7 +757,6 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
   alias             = "{alias}"
   enabled           = {str(enabled).lower()}
   display_name      = "{display_name}"
-  access_type        = "PUBLIC"
   
   # Configuration OIDC
   authorization_url = "{authorization_url}"
@@ -769,6 +768,12 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
                 config += f'  client_secret     = "{client_secret}"\n'
             if default_scopes:
                 config += f'  default_scopes    = "{default_scopes}"\n'
+            
+            # Ajouter access_type via extra_config
+            config += '\n  # Configuration supplémentaire\n'
+            config += '  extra_config = {\n'
+            config += '    "access_type" = "PUBLIC"\n'
+            config += '  }\n'
             
             config += "}\n"
         
