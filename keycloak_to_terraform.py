@@ -419,15 +419,26 @@ resource "keycloak_openid_client" "{client_resource_name}" {{
             if auth_flow_overrides:
                 config += '\n  # Authentication flow binding overrides\n'
                 config += '  authentication_flow_binding_overrides {\n'
+                
+                # Gérer browser_id
+                browser_flow = auth_flow_overrides.get('browser')
+                if browser_flow:
+                    config += f'    browser_id = "{browser_flow}"\n'
+                else:
+                    config += '    browser_id = null\n'
+                
+                # Gérer direct_grant_id
+                direct_grant_flow = auth_flow_overrides.get('direct_grant')
+                if direct_grant_flow:
+                    config += f'    direct_grant_id = "{direct_grant_flow}"\n'
+                else:
+                    config += '    direct_grant_id = null\n'
+                
+                # Gérer d'autres types de flow
                 for flow_type, flow_alias in auth_flow_overrides.items():
-                    # Mapper les types de flow vers les noms d'attributs corrects
-                    if flow_type == 'browser':
-                        config += f'    browser_id = "{flow_alias}"\n'
-                    elif flow_type == 'direct_grant':
-                        config += f'    direct_grant_id = "{flow_alias}"\n'
-                    else:
-                        # Pour d'autres types de flow, utiliser le nom avec _id
+                    if flow_type not in ['browser', 'direct_grant']:
                         config += f'    {flow_type}_id = "{flow_alias}"\n'
+                
                 config += '  }\n'
             
             config += "}\n"
