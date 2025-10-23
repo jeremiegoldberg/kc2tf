@@ -144,12 +144,28 @@ class KeycloakToTerraform:
     
     def clean_resource_name(self, name):
         """Nettoie un nom pour qu'il soit valide comme nom de ressource Terraform"""
+        if not name:
+            return ""
+        
         # Remplacer les caractères non valides par des underscores
         import re
         cleaned = re.sub(r'[^a-zA-Z0-9_]', '_', name)
+        
+        # Supprimer les underscores multiples
+        while '__' in cleaned:
+            cleaned = cleaned.replace('__', '_')
+        
+        # Supprimer les underscores en début et fin
+        cleaned = cleaned.strip('_')
+        
         # S'assurer que le nom commence par une lettre
         if cleaned and not cleaned[0].isalpha():
             cleaned = 'r_' + cleaned
+        
+        # S'assurer que le nom ne se termine pas par un underscore
+        if cleaned.endswith('_'):
+            cleaned = cleaned[:-1]
+        
         return cleaned
     
     def replace_variables(self, content):
@@ -479,7 +495,7 @@ resource "keycloak_openid_client" "{client_resource_name}" {{
                         alias = flow.get('alias', '')
                         if alias and alias.strip():
                             # Nettoyer le nom pour créer le nom de ressource (même logique que generate_authentication_flows_config)
-                            resource_name = alias.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
+                            resource_name = self.clean_resource_name(alias)
                             flow_resource_mapping[alias] = resource_name
                             # Créer aussi un mapping ID -> alias
                             if flow_id:
@@ -492,10 +508,10 @@ resource "keycloak_openid_client" "{client_resource_name}" {{
                     if browser_flow in flow_id_to_alias_mapping:
                         # C'est un ID, récupérer l'alias puis le nom de ressource
                         browser_alias = flow_id_to_alias_mapping[browser_flow]
-                        browser_resource_name = flow_resource_mapping.get(browser_alias, browser_alias.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_'))
+                        browser_resource_name = flow_resource_mapping.get(browser_alias, self.clean_resource_name(browser_alias))
                     else:
                         # C'est un alias, utiliser directement
-                        browser_resource_name = flow_resource_mapping.get(browser_flow, browser_flow.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_'))
+                        browser_resource_name = flow_resource_mapping.get(browser_flow, self.clean_resource_name(browser_flow))
                     config += f'    browser_id = keycloak_authentication_flow.{browser_resource_name}.id\n'
                 else:
                     config += '    browser_id = null\n'
@@ -507,10 +523,10 @@ resource "keycloak_openid_client" "{client_resource_name}" {{
                     if direct_grant_flow in flow_id_to_alias_mapping:
                         # C'est un ID, récupérer l'alias puis le nom de ressource
                         direct_grant_alias = flow_id_to_alias_mapping[direct_grant_flow]
-                        direct_grant_resource_name = flow_resource_mapping.get(direct_grant_alias, direct_grant_alias.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_'))
+                        direct_grant_resource_name = flow_resource_mapping.get(direct_grant_alias, self.clean_resource_name(direct_grant_alias))
                     else:
                         # C'est un alias, utiliser directement
-                        direct_grant_resource_name = flow_resource_mapping.get(direct_grant_flow, direct_grant_flow.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_'))
+                        direct_grant_resource_name = flow_resource_mapping.get(direct_grant_flow, self.clean_resource_name(direct_grant_flow))
                     config += f'    direct_grant_id = keycloak_authentication_flow.{direct_grant_resource_name}.id\n'
                 else:
                     config += '    direct_grant_id = null\n'
@@ -522,10 +538,10 @@ resource "keycloak_openid_client" "{client_resource_name}" {{
                         if flow_identifier in flow_id_to_alias_mapping:
                             # C'est un ID, récupérer l'alias puis le nom de ressource
                             flow_alias = flow_id_to_alias_mapping[flow_identifier]
-                            flow_resource_name = flow_resource_mapping.get(flow_alias, flow_alias.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_'))
+                            flow_resource_name = flow_resource_mapping.get(flow_alias, self.clean_resource_name(flow_alias))
                         else:
                             # C'est un alias, utiliser directement
-                            flow_resource_name = flow_resource_mapping.get(flow_identifier, flow_identifier.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_'))
+                            flow_resource_name = flow_resource_mapping.get(flow_identifier, self.clean_resource_name(flow_identifier))
                         config += f'    {flow_type}_id = keycloak_authentication_flow.{flow_resource_name}.id\n'
                 
                 config += '  }\n'
@@ -972,7 +988,7 @@ resource "keycloak_saml_client_scope" "{resource_name}" {{
             top_level = flow.get('topLevel', True)
             
             # Nettoyer le nom pour le nom de ressource
-            resource_name = alias.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
+            resource_name = self.clean_resource_name(alias)
             
             if top_level:
                 # Flow principal
@@ -1026,7 +1042,7 @@ resource "keycloak_authentication_flow" "{resource_name}" {{
                     continue
                 
                 # Nettoyer le nom du flow parent pour la référence
-                parent_flow_resource_name = parent_flow_alias.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
+                parent_flow_resource_name = self.clean_resource_name(parent_flow_alias)
                 
                 config += f'''
 resource "keycloak_authentication_subflow" "{resource_name}" {{
@@ -1062,7 +1078,7 @@ resource "keycloak_authentication_subflow" "{resource_name}" {{
                 continue
             
             # Nettoyer le nom pour le nom de ressource
-            flow_resource_name = alias.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
+            flow_resource_name = self.clean_resource_name(alias)
             top_level = flow.get('topLevel', True)
             
             for i, execution in enumerate(executions):
@@ -1119,7 +1135,7 @@ resource "keycloak_authentication_execution" "{execution_resource_name}" {{
                 if self.is_auto_created_object(flow.get('alias', ''), 'flow'):
                     continue
                 
-                flow_resource_name = flow.get('alias', '').replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
+                flow_resource_name = self.clean_resource_name(flow.get('alias', ''))
                 executions = flow.get('authenticationExecutions', [])
                 
                 for i, execution in enumerate(executions):
@@ -1156,7 +1172,7 @@ resource "keycloak_authentication_execution" "{execution_resource_name}" {{
                 continue
             
             # Nettoyer le nom pour le nom de ressource
-            resource_name = alias.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
+            resource_name = self.clean_resource_name(alias)
             
             config += f'''
 resource "keycloak_authentication_execution_config" "{resource_name}" {{
