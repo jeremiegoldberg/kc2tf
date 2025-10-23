@@ -25,16 +25,18 @@ class KeycloakToTerraform:
         self.output_dir = "terraform_output"
         
         # Objets automatiquement créés par Keycloak (ne pas recréer pour éviter les erreurs 409)
+        # Basé sur l'analyse du fichier realm-export.json du realm master
         self.auto_created_objects = {
             # Clients par défaut créés automatiquement
             'default_clients': [
                 'account', 'account-console', 'admin-cli', 'broker', 
-                'realm-management', 'security-admin-console'
+                'master-realm', 'security-admin-console'
             ],
             
             # Rôles par défaut créés automatiquement
             'default_roles': [
-                'offline_access', 'uma_authorization'
+                'create-realm', 'default-roles-master', 'uma_authorization', 
+                'offline_access', 'admin'
             ],
             
             # Groupes par défaut créés automatiquement
@@ -43,30 +45,42 @@ class KeycloakToTerraform:
             
             # Scopes OpenID Connect par défaut créés automatiquement
             'default_oidc_scopes': [
-                'acr', 'web-origins', 'profile', 'roles', 'email', 
-                'address', 'phone', 'offline_access', 'microprofile-jwt'
+                'roles', 'acr', 'offline_access', 'email', 'microprofile-jwt',
+                'address', 'service_account', 'phone', 'web-origins', 
+                'organization', 'profile', 'basic'
             ],
             
             # Scopes SAML par défaut créés automatiquement
             'default_saml_scopes': [
-                'role_list'  # Scope SAML builtin
+                'saml_organization', 'role_list'
             ],
             
             # Flows d'authentification par défaut créés automatiquement
             'default_flows': [
-                'browser', 'direct grant', 'registration', 'reset credentials', 
-                'clients', 'first broker login', 'docker auth', 'http challenge', 
-                'saml ecp', 'registration form', 'forms', 'Account verification options',
-                'User creation or linking', 'Reset - Conditional OTP', 
-                'First broker login - Conditional OTP', 'Browser - Conditional OTP',
-                'Account Verification Options', 'Direct Grant - Conditional OTP',
-                'Handle Existing Account', 'Verify Existing Account by Re-authentication',
-                'Authentication Options', 'Verify Existing Account by Re-authentication - auth-otp-form - Conditional',
-                # Ajout de variantes communes
+                # Flows principaux (topLevel: true, builtIn: true)
+                'browser', 'clients', 'direct grant', 'docker auth', 
+                'first broker login', 'registration', 'reset credentials', 'saml ecp',
+                
+                # Subflows (topLevel: false, builtIn: true)
+                'Account verification options', 'Browser - Conditional 2FA',
+                'Direct Grant - Conditional OTP', 'First broker login - Conditional 2FA',
+                'Handle Existing Account', 'Reset - Conditional OTP',
+                'User creation or linking', 'Verify Existing Account by Re-authentication',
+                'forms', 'registration form',
+                
+                # Variantes communes
                 'browser-conditional-otp', 'browser_conditional_otp', 'browser conditional otp',
                 'direct-grant-conditional-otp', 'direct_grant_conditional_otp', 'direct grant conditional otp',
                 'first-broker-login-conditional-otp', 'first_broker_login_conditional_otp', 'first broker login conditional otp',
-                'reset-conditional-otp', 'reset_conditional_otp', 'reset conditional otp'
+                'reset-conditional-otp', 'reset_conditional_otp', 'reset conditional otp',
+                'browser-conditional-2fa', 'browser_conditional_2fa', 'browser conditional 2fa',
+                'first-broker-login-conditional-2fa', 'first_broker_login_conditional_2fa', 'first broker login conditional 2fa'
+            ],
+            
+            # Configurations d'authenticateurs par défaut créées automatiquement
+            'default_authenticator_configs': [
+                'browser-conditional-credential', 'create unique user config',
+                'first-broker-login-conditional-credential', 'review profile config'
             ],
             
             # Mappers par défaut créés automatiquement
@@ -119,6 +133,8 @@ class KeycloakToTerraform:
             return False
         elif object_type == 'flow':
             return clean_name in [f.lower() for f in self.auto_created_objects['default_flows']]
+        elif object_type == 'authenticator_config':
+            return clean_name in [a.lower() for a in self.auto_created_objects['default_authenticator_configs']]
         elif object_type == 'mapper':
             return clean_name in [m.lower() for m in self.auto_created_objects['default_mappers']]
         elif object_type == 'public_group':
@@ -1046,6 +1062,11 @@ resource "keycloak_authentication_execution" "{execution_resource_name}" {{
         for auth_config in authenticator_configs:
             alias = auth_config.get('alias', '')
             if not alias or alias.strip() == '':
+                continue
+            
+            # Vérifier si c'est une configuration automatiquement créée par Keycloak
+            if self.is_auto_created_object(alias, 'authenticator_config'):
+                self.log_debug(f"Configuration d'authenticateur '{alias}' ignorée (créée automatiquement par Keycloak)")
                 continue
             
             config_data = auth_config.get('config', {})
