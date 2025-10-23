@@ -1044,12 +1044,14 @@ resource "keycloak_authentication_flow" "{resource_name}" {{
                 # Vérifier si le flow parent est builtin ou n'existe pas comme resource
                 parent_flow_is_builtin = self.is_auto_created_object(parent_flow_alias, 'flow')
                 parent_flow_exists_as_resource = False
+                parent_flow_is_subflow = False
                 
-                # Vérifier si le flow parent existe comme resource (non builtin)
+                # Vérifier si le flow parent existe comme resource (non builtin) et déterminer son type
                 if self.realm_data and 'authenticationFlows' in self.realm_data:
                     for flow in self.realm_data['authenticationFlows']:
                         if flow.get('alias') == parent_flow_alias and not self.is_auto_created_object(parent_flow_alias, 'flow'):
                             parent_flow_exists_as_resource = True
+                            parent_flow_is_subflow = not flow.get('topLevel', True)
                             break
                 
                 # Déterminer la valeur du parent_flow_alias
@@ -1058,10 +1060,16 @@ resource "keycloak_authentication_flow" "{resource_name}" {{
                     parent_flow_alias_value = f'"{parent_flow_alias}"'
                     self.log_debug(f"Subflow '{alias}' utilise l'alias en dur pour le flow parent '{parent_flow_alias}' (builtin ou inexistant)")
                 else:
-                    # Flow parent personnalisé - utiliser la référence Terraform
+                    # Flow parent personnalisé - déterminer le type de ressource
                     parent_flow_resource_name = self.clean_resource_name(parent_flow_alias)
-                    parent_flow_alias_value = f'keycloak_authentication_flow.{parent_flow_resource_name}.alias'
-                    self.log_debug(f"Subflow '{alias}' utilise la référence Terraform pour le flow parent '{parent_flow_alias}' -> {parent_flow_resource_name}")
+                    if parent_flow_is_subflow:
+                        # Flow parent est un subflow - utiliser keycloak_authentication_subflow
+                        parent_flow_alias_value = f'keycloak_authentication_subflow.{parent_flow_resource_name}.alias'
+                        self.log_debug(f"Subflow '{alias}' utilise la référence Terraform subflow pour le flow parent '{parent_flow_alias}' -> {parent_flow_resource_name}")
+                    else:
+                        # Flow parent est un flow principal - utiliser keycloak_authentication_flow
+                        parent_flow_alias_value = f'keycloak_authentication_flow.{parent_flow_resource_name}.alias'
+                        self.log_debug(f"Subflow '{alias}' utilise la référence Terraform flow pour le flow parent '{parent_flow_alias}' -> {parent_flow_resource_name}")
                 
                 config += f'''
 resource "keycloak_authentication_subflow" "{resource_name}" {{
