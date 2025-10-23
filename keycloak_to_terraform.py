@@ -164,57 +164,78 @@ class KeycloakToTerraform:
             if variable.startswith('role_'):
                 # Variable de rôle
                 role_name = variable[5:]  # Enlever 'role_'
-                # Chercher le rôle correspondant dans les données
-                if self.realm_data and 'roles' in self.realm_data and 'realm' in self.realm_data['roles']:
-                    for role in self.realm_data['roles']['realm']:
-                        if role.get('name') == role_name:
-                            # Remplacer par la référence Terraform
-                            role_resource_name = self.clean_resource_name(role_name)
-                            replacement = f'keycloak_role.{role_resource_name}.id'
-                            content = content.replace(f'${{{variable}}}', replacement)
-                            break
-                    else:
-                        # Rôle non trouvé, remplacer par une chaîne vide
-                        content = content.replace(f'${{{variable}}}', '')
+                # Vérifier si c'est un rôle builtin (data source)
+                if self.is_auto_created_object(role_name, 'role'):
+                    # Rôle builtin - utiliser la data source
+                    role_resource_name = role_name.replace('-', '_').replace(' ', '_')
+                    replacement = f'data.keycloak_role.realm_role_{role_resource_name}.id'
+                    content = content.replace(f'${{{variable}}}', replacement)
                 else:
-                    content = content.replace(f'${{{variable}}}', '')
+                    # Rôle personnalisé - chercher dans les données
+                    if self.realm_data and 'roles' in self.realm_data and 'realm' in self.realm_data['roles']:
+                        for role in self.realm_data['roles']['realm']:
+                            if role.get('name') == role_name:
+                                # Remplacer par la référence Terraform
+                                role_resource_name = self.clean_resource_name(role_name)
+                                replacement = f'keycloak_role.{role_resource_name}.id'
+                                content = content.replace(f'${{{variable}}}', replacement)
+                                break
+                        else:
+                            # Rôle non trouvé, remplacer par une chaîne vide
+                            content = content.replace(f'${{{variable}}}', '')
+                    else:
+                        content = content.replace(f'${{{variable}}}', '')
             
             elif variable.startswith('client_'):
                 # Variable de client
                 client_id = variable[7:]  # Enlever 'client_'
-                # Chercher le client correspondant dans les données
-                if self.realm_data and 'clients' in self.realm_data:
-                    for client in self.realm_data['clients']:
-                        if client.get('clientId') == client_id:
-                            # Remplacer par la référence Terraform
-                            client_resource_name = client_id.replace('-', '_').replace(' ', '_')
-                            replacement = f'keycloak_openid_client.{client_resource_name}.id'
-                            content = content.replace(f'${{{variable}}}', replacement)
-                            break
-                    else:
-                        # Client non trouvé, remplacer par une chaîne vide
-                        content = content.replace(f'${{{variable}}}', '')
+                # Vérifier si c'est un client builtin (data source)
+                if self.is_auto_created_object(client_id, 'client'):
+                    # Client builtin - utiliser la data source
+                    client_resource_name = client_id.replace('-', '_').replace(' ', '_')
+                    replacement = f'data.keycloak_openid_client.{client_resource_name}.id'
+                    content = content.replace(f'${{{variable}}}', replacement)
                 else:
-                    content = content.replace(f'${{{variable}}}', '')
+                    # Client personnalisé - chercher dans les données
+                    if self.realm_data and 'clients' in self.realm_data:
+                        for client in self.realm_data['clients']:
+                            if client.get('clientId') == client_id:
+                                # Remplacer par la référence Terraform
+                                client_resource_name = client_id.replace('-', '_').replace(' ', '_')
+                                replacement = f'keycloak_openid_client.{client_resource_name}.id'
+                                content = content.replace(f'${{{variable}}}', replacement)
+                                break
+                        else:
+                            # Client non trouvé, remplacer par une chaîne vide
+                            content = content.replace(f'${{{variable}}}', '')
+                    else:
+                        content = content.replace(f'${{{variable}}}', '')
             
             elif variable.startswith('group_'):
                 # Variable de groupe
                 group_name = variable[6:]  # Enlever 'group_'
-                # Chercher le groupe correspondant dans les données
-                if self.realm_data and 'groups' in self.realm_data:
-                    for group in self.realm_data['groups']:
-                        if group.get('name') == group_name:
-                            # Remplacer par la référence Terraform
-                            group_path = group.get('path', f'/{group_name}')
-                            group_resource_name = group_path.replace('/', '_').replace('-', '_').replace(' ', '_').lstrip('_')
-                            replacement = f'keycloak_group.{group_resource_name}.id'
-                            content = content.replace(f'${{{variable}}}', replacement)
-                            break
-                    else:
-                        # Groupe non trouvé, remplacer par une chaîne vide
-                        content = content.replace(f'${{{variable}}}', '')
+                # Vérifier si c'est un groupe builtin (data source)
+                if self.is_auto_created_object(group_name, 'group'):
+                    # Groupe builtin - utiliser la data source
+                    group_resource_name = group_name.replace('-', '_').replace(' ', '_')
+                    replacement = f'data.keycloak_group.{group_resource_name}.id'
+                    content = content.replace(f'${{{variable}}}', replacement)
                 else:
-                    content = content.replace(f'${{{variable}}}', '')
+                    # Groupe personnalisé - chercher dans les données
+                    if self.realm_data and 'groups' in self.realm_data:
+                        for group in self.realm_data['groups']:
+                            if group.get('name') == group_name:
+                                # Remplacer par la référence Terraform
+                                group_path = group.get('path', f'/{group_name}')
+                                group_resource_name = group_path.replace('/', '_').replace('-', '_').replace(' ', '_').lstrip('_')
+                                replacement = f'keycloak_group.{group_resource_name}.id'
+                                content = content.replace(f'${{{variable}}}', replacement)
+                                break
+                        else:
+                            # Groupe non trouvé, remplacer par une chaîne vide
+                            content = content.replace(f'${{{variable}}}', '')
+                    else:
+                        content = content.replace(f'${{{variable}}}', '')
             
             elif variable.startswith('user_'):
                 # Variable d'utilisateur
@@ -237,12 +258,20 @@ class KeycloakToTerraform:
             elif variable.startswith('scope_'):
                 # Variable de scope
                 scope_name = variable[6:]  # Enlever 'scope_'
-                # Vérifier si c'est un scope SAML builtin
-                if scope_name in self.auto_created_objects['default_saml_scopes']:
-                    # Scope SAML builtin - remplacer par la valeur directe
-                    content = content.replace(f'${{{variable}}}', scope_name)
+                # Vérifier si c'est un scope builtin (data source)
+                if self.is_auto_created_object(scope_name, 'scope'):
+                    # Scope builtin - utiliser la data source
+                    scope_resource_name = scope_name.replace('-', '_').replace(' ', '_')
+                    # Déterminer le type de scope
+                    if scope_name in self.auto_created_objects['default_saml_scopes']:
+                        # Scope SAML builtin - remplacer par la valeur directe (non supporté comme data source)
+                        content = content.replace(f'${{{variable}}}', scope_name)
+                    else:
+                        # Scope OIDC builtin - utiliser la data source
+                        replacement = f'data.keycloak_openid_client_scope.default_scope_{scope_resource_name}.id'
+                        content = content.replace(f'${{{variable}}}', replacement)
                 else:
-                    # Chercher le scope correspondant dans les données
+                    # Scope personnalisé - chercher dans les données
                     if self.realm_data and 'clientScopes' in self.realm_data:
                         for scope in self.realm_data['clientScopes']:
                             if scope.get('name') == scope_name:
