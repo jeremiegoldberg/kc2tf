@@ -1002,7 +1002,7 @@ resource "keycloak_authentication_flow" "{resource_name}" {{
 '''
             else:
                 # Subflow - améliorer la recherche du flow parent
-                parent_flow_alias = flow.get('parentFlowAlias', '')
+                parent_flow_alias = flow.get('parentFlow', '') or flow.get('parentFlowAlias', '')
                 requirement = flow.get('requirement', 'REQUIRED')
                 
                 # Si parentFlowAlias est vide, essayer de trouver le parent via d'autres moyens
@@ -1056,10 +1056,12 @@ resource "keycloak_authentication_flow" "{resource_name}" {{
                 if parent_flow_is_builtin or not parent_flow_exists_as_resource:
                     # Flow parent builtin ou inexistant - utiliser l'alias en dur
                     parent_flow_alias_value = f'"{parent_flow_alias}"'
+                    self.log_debug(f"Subflow '{alias}' utilise l'alias en dur pour le flow parent '{parent_flow_alias}' (builtin ou inexistant)")
                 else:
                     # Flow parent personnalisé - utiliser la référence Terraform
                     parent_flow_resource_name = self.clean_resource_name(parent_flow_alias)
                     parent_flow_alias_value = f'keycloak_authentication_flow.{parent_flow_resource_name}.alias'
+                    self.log_debug(f"Subflow '{alias}' utilise la référence Terraform pour le flow parent '{parent_flow_alias}' -> {parent_flow_resource_name}")
                 
                 config += f'''
 resource "keycloak_authentication_subflow" "{resource_name}" {{
