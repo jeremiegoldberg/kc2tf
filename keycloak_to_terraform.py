@@ -420,24 +420,29 @@ resource "keycloak_openid_client" "{client_resource_name}" {{
                 config += '\n  # Authentication flow binding overrides\n'
                 config += '  authentication_flow_binding_overrides {\n'
                 
-                # Gérer browser_id
+                # Gérer browser_id avec référence Terraform
                 browser_flow = auth_flow_overrides.get('browser')
                 if browser_flow:
-                    config += f'    browser_id = "{browser_flow}"\n'
+                    # Nettoyer le nom du flow pour créer une référence Terraform
+                    browser_resource_name = browser_flow.replace('-', '_').replace(' ', '_')
+                    config += f'    browser_id = keycloak_authentication_flow.{browser_resource_name}.id\n'
                 else:
                     config += '    browser_id = null\n'
                 
-                # Gérer direct_grant_id
+                # Gérer direct_grant_id avec référence Terraform
                 direct_grant_flow = auth_flow_overrides.get('direct_grant')
                 if direct_grant_flow:
-                    config += f'    direct_grant_id = "{direct_grant_flow}"\n'
+                    # Nettoyer le nom du flow pour créer une référence Terraform
+                    direct_grant_resource_name = direct_grant_flow.replace('-', '_').replace(' ', '_')
+                    config += f'    direct_grant_id = keycloak_authentication_flow.{direct_grant_resource_name}.id\n'
                 else:
                     config += '    direct_grant_id = null\n'
                 
-                # Gérer d'autres types de flow
+                # Gérer d'autres types de flow avec références Terraform
                 for flow_type, flow_alias in auth_flow_overrides.items():
                     if flow_type not in ['browser', 'direct_grant']:
-                        config += f'    {flow_type}_id = "{flow_alias}"\n'
+                        flow_resource_name = flow_alias.replace('-', '_').replace(' ', '_')
+                        config += f'    {flow_type}_id = keycloak_authentication_flow.{flow_resource_name}.id\n'
                 
                 config += '  }\n'
             
