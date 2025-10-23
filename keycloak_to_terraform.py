@@ -619,67 +619,118 @@ resource "keycloak_group" "{resource_name}" {{
         return config
     
     def generate_auto_created_data_sources(self) -> str:
-        """Génère des data sources pour les objets automatiquement créés par Keycloak"""
+        """Génère des data sources pour les objets automatiquement créés par Keycloak trouvés dans l'export"""
         config = ""
         
-        # Data sources pour les clients par défaut
-        config += "\n# Data sources pour les clients automatiquement créés par Keycloak\n"
-        for client in self.auto_created_objects['default_clients']:
-            client_resource_name = client.replace('-', '_').replace(' ', '_')
-            config += f'''
+        if not self.realm_data:
+            return config
+        
+        # Data sources pour les clients builtin trouvés dans l'export
+        config += "\n# Data sources pour les clients builtin trouvés dans l'export\n"
+        if 'clients' in self.realm_data:
+            for client in self.realm_data['clients']:
+                client_id = client.get('clientId', '')
+                if self.is_auto_created_object(client_id, 'client'):
+                    client_resource_name = client_id.replace('-', '_').replace(' ', '_')
+                    config += f'''
 data "keycloak_openid_client" "{client_resource_name}" {{
   realm_id  = keycloak_realm.{self.get_realm_resource_name()}.id
-  client_id = "{client}"
+  client_id = "{client_id}"
 }}
 '''
         
-        # Data sources pour les rôles par défaut
-        config += "\n# Data sources pour les rôles automatiquement créés par Keycloak\n"
-        for role in self.auto_created_objects['default_roles']:
-            role_resource_name = role.replace('-', '_').replace(' ', '_')
-            config += f'''
+        # Data sources pour les rôles builtin trouvés dans l'export
+        config += "\n# Data sources pour les rôles builtin trouvés dans l'export\n"
+        if 'roles' in self.realm_data and 'realm' in self.realm_data['roles']:
+            for role in self.realm_data['roles']['realm']:
+                role_name = role.get('name', '')
+                if self.is_auto_created_object(role_name, 'role'):
+                    role_resource_name = role_name.replace('-', '_').replace(' ', '_')
+                    config += f'''
 data "keycloak_role" "realm_role_{role_resource_name}" {{
   realm_id = keycloak_realm.{self.get_realm_resource_name()}.id
-  name     = "{role}"
+  name     = "{role_name}"
 }}
 '''
         
-        # Ajouter le rôle default-roles-{realm_name} si le realm est défini
-        if self.realm_data and 'realm' in self.realm_data:
-            realm_name = self.realm_data['realm']
-            default_roles_realm = f'default-roles-{realm_name}'
-            role_resource_name = default_roles_realm.replace('-', '_').replace(' ', '_')
-            config += f'''
-data "keycloak_role" "realm_role_{role_resource_name}" {{
-  realm_id = keycloak_realm.{self.get_realm_resource_name()}.id
-  name     = "{default_roles_realm}"
-}}
-'''
-        
-        # Data sources pour les groupes par défaut
-        config += "\n# Data sources pour les groupes automatiquement créés par Keycloak\n"
-        for group in self.auto_created_objects['default_groups']:
-            group_resource_name = group.replace('-', '_').replace(' ', '_')
-            config += f'''
+        # Data sources pour les groupes builtin trouvés dans l'export
+        config += "\n# Data sources pour les groupes builtin trouvés dans l'export\n"
+        if 'groups' in self.realm_data:
+            for group in self.realm_data['groups']:
+                group_name = group.get('name', '')
+                if self.is_auto_created_object(group_name, 'group'):
+                    group_resource_name = group_name.replace('-', '_').replace(' ', '_')
+                    config += f'''
 data "keycloak_group" "{group_resource_name}" {{
   realm_id = keycloak_realm.{self.get_realm_resource_name()}.id
-  name     = "{group}"
+  name     = "{group_name}"
 }}
 '''
         
-        # Data sources pour les scopes OpenID Connect par défaut
-        config += "\n# Data sources pour les scopes OpenID Connect automatiquement créés par Keycloak\n"
-        for scope in self.auto_created_objects['default_oidc_scopes']:
-            scope_resource_name = scope.replace('-', '_').replace(' ', '_')
-            config += f'''
+        # Data sources pour les scopes builtin trouvés dans l'export
+        config += "\n# Data sources pour les scopes builtin trouvés dans l'export\n"
+        if 'clientScopes' in self.realm_data:
+            for scope in self.realm_data['clientScopes']:
+                scope_name = scope.get('name', '')
+                if self.is_auto_created_object(scope_name, 'scope'):
+                    scope_resource_name = scope_name.replace('-', '_').replace(' ', '_')
+                    protocol = scope.get('protocol', 'openid-connect')
+                    
+                    if protocol == 'openid-connect':
+                        config += f'''
 data "keycloak_openid_client_scope" "default_scope_{scope_resource_name}" {{
   realm_id = keycloak_realm.{self.get_realm_resource_name()}.id
-  name     = "{scope}"
+  name     = "{scope_name}"
+}}
+'''
+                    elif protocol == 'saml':
+                        # Note: Les scopes SAML builtin ne sont pas supportés comme data sources
+                        # par le provider keycloak/keycloak, ils sont référencés directement par leur nom
+                        config += f'''
+# Scope SAML builtin '{scope_name}' - référencé directement par son nom
+# data "keycloak_saml_client_scope" "default_scope_{scope_resource_name}" {{
+#   realm_id = keycloak_realm.{self.get_realm_resource_name()}.id
+#   name     = "{scope_name}"
+# }}
+'''
+        
+        # Data sources pour les flows builtin trouvés dans l'export
+        config += "\n# Data sources pour les flows builtin trouvés dans l'export\n"
+        if 'authenticationFlows' in self.realm_data:
+            for flow in self.realm_data['authenticationFlows']:
+                flow_alias = flow.get('alias', '')
+                if self.is_auto_created_object(flow_alias, 'flow'):
+                    flow_resource_name = flow_alias.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
+                    top_level = flow.get('topLevel', True)
+                    
+                    if top_level:
+                        config += f'''
+data "keycloak_authentication_flow" "{flow_resource_name}" {{
+  realm_id = keycloak_realm.{self.get_realm_resource_name()}.id
+  alias    = "{flow_alias}"
+}}
+'''
+                    else:
+                        config += f'''
+data "keycloak_authentication_subflow" "{flow_resource_name}" {{
+  realm_id = keycloak_realm.{self.get_realm_resource_name()}.id
+  alias    = "{flow_alias}"
 }}
 '''
         
-        # Note: Les scopes SAML builtin ne sont pas supportés comme data sources
-        # par le provider keycloak/keycloak, ils sont référencés directement par leur nom
+        # Data sources pour les configurations d'authenticateurs builtin trouvées dans l'export
+        config += "\n# Data sources pour les configurations d'authenticateurs builtin trouvées dans l'export\n"
+        if 'authenticatorConfig' in self.realm_data:
+            for auth_config in self.realm_data['authenticatorConfig']:
+                config_alias = auth_config.get('alias', '')
+                if self.is_auto_created_object(config_alias, 'authenticator_config'):
+                    config_resource_name = config_alias.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
+                    config += f'''
+data "keycloak_authentication_execution_config" "{config_resource_name}" {{
+  realm_id = keycloak_realm.{self.get_realm_resource_name()}.id
+  alias    = "{config_alias}"
+}}
+'''
         
         return config
     
