@@ -420,11 +420,21 @@ resource "keycloak_openid_client" "{client_resource_name}" {{
                 config += '\n  # Authentication flow binding overrides\n'
                 config += '  authentication_flow_binding_overrides {\n'
                 
+                # Créer un mapping des flows pour trouver les noms de ressources
+                flow_resource_mapping = {}
+                if self.realm_data and 'authenticationFlows' in self.realm_data:
+                    for flow in self.realm_data['authenticationFlows']:
+                        alias = flow.get('alias', '')
+                        if alias and alias.strip():
+                            # Nettoyer le nom pour créer le nom de ressource (même logique que generate_authentication_flows_config)
+                            resource_name = alias.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
+                            flow_resource_mapping[alias] = resource_name
+                
                 # Gérer browser_id avec référence Terraform
                 browser_flow = auth_flow_overrides.get('browser')
                 if browser_flow:
-                    # Nettoyer le nom du flow pour créer une référence Terraform (même logique que generate_authentication_flows_config)
-                    browser_resource_name = browser_flow.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
+                    # Chercher le nom de ressource correspondant
+                    browser_resource_name = flow_resource_mapping.get(browser_flow, browser_flow.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_'))
                     config += f'    browser_id = keycloak_authentication_flow.{browser_resource_name}.id\n'
                 else:
                     config += '    browser_id = null\n'
@@ -432,8 +442,8 @@ resource "keycloak_openid_client" "{client_resource_name}" {{
                 # Gérer direct_grant_id avec référence Terraform
                 direct_grant_flow = auth_flow_overrides.get('direct_grant')
                 if direct_grant_flow:
-                    # Nettoyer le nom du flow pour créer une référence Terraform (même logique que generate_authentication_flows_config)
-                    direct_grant_resource_name = direct_grant_flow.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
+                    # Chercher le nom de ressource correspondant
+                    direct_grant_resource_name = flow_resource_mapping.get(direct_grant_flow, direct_grant_flow.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_'))
                     config += f'    direct_grant_id = keycloak_authentication_flow.{direct_grant_resource_name}.id\n'
                 else:
                     config += '    direct_grant_id = null\n'
@@ -441,8 +451,8 @@ resource "keycloak_openid_client" "{client_resource_name}" {{
                 # Gérer d'autres types de flow avec références Terraform
                 for flow_type, flow_alias in auth_flow_overrides.items():
                     if flow_type not in ['browser', 'direct_grant']:
-                        # Nettoyer le nom du flow pour créer une référence Terraform (même logique que generate_authentication_flows_config)
-                        flow_resource_name = flow_alias.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_')
+                        # Chercher le nom de ressource correspondant
+                        flow_resource_name = flow_resource_mapping.get(flow_alias, flow_alias.replace('@', '_').replace('.', '_').replace('-', '_').replace(' ', '_'))
                         config += f'    {flow_type}_id = keycloak_authentication_flow.{flow_resource_name}.id\n'
                 
                 config += '  }\n'
