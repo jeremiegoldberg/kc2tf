@@ -136,7 +136,13 @@ class KeycloakToTerraform:
                 return True
             return False
         elif object_type == 'flow':
-            return clean_name in [f.lower() for f in self.auto_created_objects['default_flows']]
+            # Vérifier d'abord la liste explicite
+            if clean_name in [f.lower() for f in self.auto_created_objects['default_flows']]:
+                return True
+            # Vérifier les patterns dynamiques pour les subflows
+            if name.endswith('- Conditional OTP') or name.endswith('- Conditional 2FA'):
+                return True
+            return False
         elif object_type == 'authenticator_config':
             return clean_name in [a.lower() for a in self.auto_created_objects['default_authenticator_configs']]
         elif object_type == 'mapper':
