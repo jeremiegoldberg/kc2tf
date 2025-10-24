@@ -68,6 +68,10 @@ class KeycloakToTerraform:
                 'User creation or linking', 'Verify Existing Account by Re-authentication',
                 'forms', 'registration form',
                 
+                # Flows builtin spécifiques identifiés
+                'First broker login - Conditional OTP', 'Browser - Conditional OTP',
+                'browser_no_form_Browser_Conditional_OTP',
+                
                 # Variantes communes
                 'browser-conditional-otp', 'browser_conditional_otp', 'browser conditional otp',
                 'direct-grant-conditional-otp', 'direct_grant_conditional_otp', 'direct grant conditional otp',
