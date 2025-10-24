@@ -423,6 +423,7 @@ provider "keycloak" {{
             public_client = client.get('publicClient', False)
             bearer_only = client.get('bearerOnly', False)
             
+            
             # URLs de redirection
             redirect_uris = client.get('redirectUris', [])
             web_origins = client.get('webOrigins', [])
@@ -441,6 +442,14 @@ provider "keycloak" {{
                 access_type = "PUBLIC"
             else:
                 access_type = "CONFIDENTIAL"
+            
+            # Pour les clients bearer-only, désactiver tous les flows OAuth2
+            if access_type == 'BEARER-ONLY' or bearer_only:
+                standard_flow_enabled = False
+                implicit_flow_enabled = False
+                direct_access_grants_enabled = False
+                service_accounts_enabled = False
+                self.log_debug(f"Client '{client_id}' est bearer-only, tous les flows OAuth2 sont désactivés")
             
             # Générer le nom de ressource client de manière cohérente
             client_resource_name = client_id.replace('-', '_').replace(' ', '_')
