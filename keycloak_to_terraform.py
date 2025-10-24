@@ -30,7 +30,7 @@ class KeycloakToTerraform:
             # Clients par défaut créés automatiquement
             'default_clients': [
                 'account', 'account-console', 'admin-cli', 'broker', 
-                'master-realm', 'security-admin-console'
+                'master-realm', 'security-admin-console', 'realm-management'
             ],
             
             # Rôles par défaut créés automatiquement
