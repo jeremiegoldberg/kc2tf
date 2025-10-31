@@ -390,8 +390,88 @@ provider "keycloak" {{
   realm                = "{realm}"
   display_name         = "{display_name}"
   enabled              = {str(enabled).lower()}
-}}
 '''
+        
+        # Récupérer les flows par défaut du realm
+        browser_flow = self.realm_data.get('browserFlow', '')
+        registration_flow = self.realm_data.get('registrationFlow', '')
+        direct_grant_flow = self.realm_data.get('directGrantFlow', '')
+        reset_credentials_flow = self.realm_data.get('resetCredentialsFlow', '')
+        client_authentication_flow = self.realm_data.get('clientAuthenticationFlow', '')
+        docker_authentication_flow = self.realm_data.get('dockerAuthenticationFlow', '')
+        first_broker_login_flow = self.realm_data.get('firstBrokerLoginFlow', '')
+        
+        # Créer un mapping des flows pour trouver les références Terraform
+        flow_resource_mapping = {}
+        if 'authenticationFlows' in self.realm_data:
+            for flow in self.realm_data['authenticationFlows']:
+                alias = flow.get('alias', '')
+                if alias and alias.strip() and not self.is_auto_created_object(alias, 'flow'):
+                    resource_name = self.clean_resource_name(alias)
+                    flow_resource_mapping[alias] = resource_name
+        
+        # Ajouter les flows par défaut s'ils sont personnalisés (non builtin)
+        has_extra_config = False
+        extra_config_content = []
+        
+        if browser_flow and not self.is_auto_created_object(browser_flow, 'flow') and browser_flow in flow_resource_mapping:
+            extra_config_content.append(f'    "browserFlow" = keycloak_authentication_flow.{flow_resource_mapping[browser_flow]}.alias\n')
+            has_extra_config = True
+        
+        if registration_flow and not self.is_auto_created_object(registration_flow, 'flow') and registration_flow in flow_resource_mapping:
+            extra_config_content.append(f'    "registrationFlow" = keycloak_authentication_flow.{flow_resource_mapping[registration_flow]}.alias\n')
+            has_extra_config = True
+        
+        if direct_grant_flow and not self.is_auto_created_object(direct_grant_flow, 'flow') and direct_grant_flow in flow_resource_mapping:
+            extra_config_content.append(f'    "directGrantFlow" = keycloak_authentication_flow.{flow_resource_mapping[direct_grant_flow]}.alias\n')
+            has_extra_config = True
+        
+        if reset_credentials_flow and not self.is_auto_created_object(reset_credentials_flow, 'flow') and reset_credentials_flow in flow_resource_mapping:
+            extra_config_content.append(f'    "resetCredentialsFlow" = keycloak_authentication_flow.{flow_resource_mapping[reset_credentials_flow]}.alias\n')
+            has_extra_config = True
+        
+        if client_authentication_flow and not self.is_auto_created_object(client_authentication_flow, 'flow') and client_authentication_flow in flow_resource_mapping:
+            extra_config_content.append(f'    "clientAuthenticationFlow" = keycloak_authentication_flow.{flow_resource_mapping[client_authentication_flow]}.alias\n')
+            has_extra_config = True
+        
+        if docker_authentication_flow and not self.is_auto_created_object(docker_authentication_flow, 'flow') and docker_authentication_flow in flow_resource_mapping:
+            extra_config_content.append(f'    "dockerAuthenticationFlow" = keycloak_authentication_flow.{flow_resource_mapping[docker_authentication_flow]}.alias\n')
+            has_extra_config = True
+        
+        if first_broker_login_flow and not self.is_auto_created_object(first_broker_login_flow, 'flow') and first_broker_login_flow in flow_resource_mapping:
+            extra_config_content.append(f'    "firstBrokerLoginFlow" = keycloak_authentication_flow.{flow_resource_mapping[first_broker_login_flow]}.alias\n')
+            has_extra_config = True
+        
+        # Gestion des attributs ACR to LOA via extra_config
+        attributes = self.realm_data.get('attributes', {})
+        acr_loa_map = attributes.get('acr.loa.map', '')
+        acr_loa_default = attributes.get('acr.loa.map.default', '')
+        acr_loa_force = attributes.get('acr.loa.map.force', '')
+        
+        # Ajouter les attributs ACR to LOA via extra_config s'ils existent
+        if acr_loa_map or acr_loa_default or acr_loa_force:
+            if not has_extra_config:
+                has_extra_config = True
+            
+            if acr_loa_map:
+                # Échapper correctement les guillemets pour Terraform
+                escaped_acr_loa_map = acr_loa_map.replace('"', '\\"')
+                extra_config_content.append(f'    "acr.loa.map" = "{escaped_acr_loa_map}"\n')
+            
+            if acr_loa_default:
+                extra_config_content.append(f'    "acr.loa.map.default" = "{acr_loa_default}"\n')
+            
+            if acr_loa_force:
+                extra_config_content.append(f'    "acr.loa.map.force" = "{acr_loa_force.lower()}"\n')
+        
+        # Ajouter le bloc extra_config s'il y a du contenu
+        if has_extra_config:
+            config += '\n  # Configuration des flows et attributs\n'
+            config += '  extra_config = {\n'
+            config += ''.join(extra_config_content)
+            config += '  }\n'
+        
+        config += "}\n"
         return config
     
     def generate_clients_config(self) -> str:
@@ -883,6 +963,18 @@ resource "keycloak_user" "{resource_name}" {{
             client_secret = config_data.get('clientSecret', '')
             default_scopes = config_data.get('defaultScope', 'openid')
             
+            # Récupérer le flow de first broker login si disponible
+            first_broker_login_flow_alias = idp.get('firstBrokerLoginFlowAlias', '')
+            
+            # Créer un mapping des flows pour trouver les références Terraform
+            flow_resource_mapping = {}
+            if 'authenticationFlows' in self.realm_data:
+                for flow in self.realm_data['authenticationFlows']:
+                    flow_alias = flow.get('alias', '')
+                    if flow_alias and flow_alias.strip() and not self.is_auto_created_object(flow_alias, 'flow'):
+                        resource_name = self.clean_resource_name(flow_alias)
+                        flow_resource_mapping[flow_alias] = resource_name
+            
             config += f'''
 resource "keycloak_oidc_identity_provider" "{alias}" {{
         realm             = keycloak_realm.{self.get_realm_resource_name()}.id
@@ -900,6 +992,17 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
                 config += f'  client_secret     = "{client_secret}"\n'
             if default_scopes:
                 config += f'  default_scopes    = "{default_scopes}"\n'
+            
+            # Ajouter le lien vers le flow de first broker login si disponible
+            if first_broker_login_flow_alias:
+                # Vérifier si c'est un flow personnalisé (non builtin) pour utiliser une référence Terraform
+                if not self.is_auto_created_object(first_broker_login_flow_alias, 'flow') and first_broker_login_flow_alias in flow_resource_mapping:
+                    # Flow personnalisé - utiliser la référence Terraform
+                    flow_resource_name = flow_resource_mapping[first_broker_login_flow_alias]
+                    config += f'  first_broker_login_flow_alias = keycloak_authentication_flow.{flow_resource_name}.alias\n'
+                else:
+                    # Flow builtin - utiliser l'alias en dur
+                    config += f'  first_broker_login_flow_alias = "{first_broker_login_flow_alias}"\n'
             
             # Ajouter access_type via extra_config
             config += '\n  # Configuration supplémentaire\n'
