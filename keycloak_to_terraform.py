@@ -454,8 +454,9 @@ provider "keycloak" {{
                 has_extra_config = True
             
             if acr_loa_map:
-                # Échapper correctement les guillemets pour Terraform
-                escaped_acr_loa_map = acr_loa_map.replace('"', '\\"')
+                # Échapper correctement les guillemets et backslashes pour Terraform
+                # D'abord échapper les backslashes, puis les guillemets
+                escaped_acr_loa_map = acr_loa_map.replace('\\', '\\\\').replace('"', '\\"')
                 extra_config_content.append(f'    "acr.loa.map" = "{escaped_acr_loa_map}"\n')
             
             if acr_loa_default:
