@@ -410,66 +410,24 @@ provider "keycloak" {{
                     resource_name = self.clean_resource_name(alias)
                     flow_resource_mapping[alias] = resource_name
         
-        # Ajouter les flows par défaut s'ils sont personnalisés (non builtin)
-        has_extra_config = False
-        extra_config_content = []
+        # Récupérer tous les attributs du realm
+        realm_attributes = self.realm_data.get('attributes', {})
         
-        if browser_flow and not self.is_auto_created_object(browser_flow, 'flow') and browser_flow in flow_resource_mapping:
-            extra_config_content.append(f'    "browserFlow" = keycloak_authentication_flow.{flow_resource_mapping[browser_flow]}.alias\n')
-            has_extra_config = True
-        
-        if registration_flow and not self.is_auto_created_object(registration_flow, 'flow') and registration_flow in flow_resource_mapping:
-            extra_config_content.append(f'    "registrationFlow" = keycloak_authentication_flow.{flow_resource_mapping[registration_flow]}.alias\n')
-            has_extra_config = True
-        
-        if direct_grant_flow and not self.is_auto_created_object(direct_grant_flow, 'flow') and direct_grant_flow in flow_resource_mapping:
-            extra_config_content.append(f'    "directGrantFlow" = keycloak_authentication_flow.{flow_resource_mapping[direct_grant_flow]}.alias\n')
-            has_extra_config = True
-        
-        if reset_credentials_flow and not self.is_auto_created_object(reset_credentials_flow, 'flow') and reset_credentials_flow in flow_resource_mapping:
-            extra_config_content.append(f'    "resetCredentialsFlow" = keycloak_authentication_flow.{flow_resource_mapping[reset_credentials_flow]}.alias\n')
-            has_extra_config = True
-        
-        if client_authentication_flow and not self.is_auto_created_object(client_authentication_flow, 'flow') and client_authentication_flow in flow_resource_mapping:
-            extra_config_content.append(f'    "clientAuthenticationFlow" = keycloak_authentication_flow.{flow_resource_mapping[client_authentication_flow]}.alias\n')
-            has_extra_config = True
-        
-        if docker_authentication_flow and not self.is_auto_created_object(docker_authentication_flow, 'flow') and docker_authentication_flow in flow_resource_mapping:
-            extra_config_content.append(f'    "dockerAuthenticationFlow" = keycloak_authentication_flow.{flow_resource_mapping[docker_authentication_flow]}.alias\n')
-            has_extra_config = True
-        
-        if first_broker_login_flow and not self.is_auto_created_object(first_broker_login_flow, 'flow') and first_broker_login_flow in flow_resource_mapping:
-            extra_config_content.append(f'    "firstBrokerLoginFlow" = keycloak_authentication_flow.{flow_resource_mapping[first_broker_login_flow]}.alias\n')
-            has_extra_config = True
-        
-        # Gestion des attributs ACR to LOA via extra_config
-        attributes = self.realm_data.get('attributes', {})
-        acr_loa_map = attributes.get('acr.loa.map', '')
-        acr_loa_default = attributes.get('acr.loa.map.default', '')
-        acr_loa_force = attributes.get('acr.loa.map.force', '')
-        
-        # Ajouter les attributs ACR to LOA via extra_config s'ils existent
-        if acr_loa_map or acr_loa_default or acr_loa_force:
-            if not has_extra_config:
-                has_extra_config = True
+        # Ajouter le bloc attributes s'il y a du contenu
+        if realm_attributes:
+            config += '\n  # Attributs du realm\n'
+            config += '  attributes = {\n'
             
-            if acr_loa_map:
-                # Échapper correctement les guillemets et backslashes pour Terraform
-                # D'abord échapper les backslashes, puis les guillemets
-                escaped_acr_loa_map = acr_loa_map.replace('\\', '\\\\').replace('"', '\\"')
-                extra_config_content.append(f'    "acr.loa.map" = "{escaped_acr_loa_map}"\n')
+            # Ajouter tous les attributs du realm
+            for key, value in realm_attributes.items():
+                if value:  # Ne pas ajouter les valeurs vides
+                    # Échapper correctement les guillemets et backslashes pour Terraform
+                    if isinstance(value, str):
+                        escaped_value = value.replace('\\', '\\\\').replace('"', '\\"')
+                        config += f'    "{key}" = "{escaped_value}"\n'
+                    else:
+                        config += f'    "{key}" = "{value}"\n'
             
-            if acr_loa_default:
-                extra_config_content.append(f'    "acr.loa.map.default" = "{acr_loa_default}"\n')
-            
-            if acr_loa_force:
-                extra_config_content.append(f'    "acr.loa.map.force" = "{acr_loa_force.lower()}"\n')
-        
-        # Ajouter le bloc extra_config s'il y a du contenu
-        if has_extra_config:
-            config += '\n  # Configuration des flows et attributs\n'
-            config += '  extra_config = {\n'
-            config += ''.join(extra_config_content)
             config += '  }\n'
         
         config += "}\n"
