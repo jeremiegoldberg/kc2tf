@@ -930,33 +930,72 @@ resource "keycloak_user" "{resource_name}" {{
             
             # Récupérer les valeurs de configuration
             config_data = idp.get('config', {})
-            authorization_url = config_data.get('authorizationUrl', 'https://example.com/auth')
-            token_url = config_data.get('tokenUrl', 'https://example.com/token')
+            authorization_url = config_data.get('authorizationUrl', '')
+            token_url = config_data.get('tokenUrl', '')
             client_id = config_data.get('clientId', '')
             client_secret = config_data.get('clientSecret', '')
-            default_scopes = config_data.get('defaultScope', 'openid')
+            default_scopes = config_data.get('defaultScope', '')
+            user_info_url = config_data.get('userInfoUrl', '')
+            issuer = config_data.get('issuer', '')
+            jwks_url = config_data.get('jwksUrl', '')
+            logout_url = config_data.get('logoutUrl', '')
+            
+            # Récupérer les autres attributs
+            store_token = idp.get('storeToken', False)
+            trust_email = idp.get('trustEmail', False)
+            hide_on_login_page = idp.get('hideOnLoginPage', False)
+            sync_mode = config_data.get('syncMode', '')
+            backchannel_supported = config_data.get('backchannelSupported', 'false').lower() == 'true'
+            validate_signature = config_data.get('validateSignature', 'true').lower() == 'true'
             
             # Récupérer les flows de broker login si disponibles
             first_broker_login_flow_alias = idp.get('firstBrokerLoginFlowAlias', '')
             post_broker_login_flow_alias = idp.get('postBrokerLoginFlowAlias', '')
             
-            config += f'''
+            # Déterminer le type de provider et générer la ressource appropriée
+            if provider_id == 'oidc':
+                config += f'''
 resource "keycloak_oidc_identity_provider" "{alias}" {{
         realm             = keycloak_realm.{self.get_realm_resource_name()}.id
   alias             = "{alias}"
   enabled           = {str(enabled).lower()}
   display_name      = "{display_name}"
-  
-  # Configuration OIDC
-  authorization_url = "{authorization_url}"
-  token_url         = "{token_url}"
+  store_token       = {str(store_token).lower()}
+  trust_email       = {str(trust_email).lower()}
+  hide_on_login_page = {str(hide_on_login_page).lower()}
 '''
-            if client_id:
-                config += f'  client_id         = "{client_id}"\n'
-            if client_secret:
-                config += f'  client_secret     = "{client_secret}"\n'
-            if default_scopes:
-                config += f'  default_scopes    = "{default_scopes}"\n'
+                if sync_mode:
+                    config += f'  sync_mode         = "{sync_mode}"\n'
+                if authorization_url:
+                    config += f'  authorization_url = "{authorization_url}"\n'
+                if token_url:
+                    config += f'  token_url         = "{token_url}"\n'
+                if logout_url:
+                    config += f'  logout_url        = "{logout_url}"\n'
+                if user_info_url:
+                    config += f'  user_info_url     = "{user_info_url}"\n'
+                if backchannel_supported:
+                    config += f'  backchannel_supported = {str(backchannel_supported).lower()}\n'
+                if client_id:
+                    config += f'  client_id         = "{client_id}"\n'
+                if client_secret:
+                    config += f'  client_secret     = "{client_secret}"\n'
+                if issuer:
+                    config += f'  issuer            = "{issuer}"\n'
+                if validate_signature:
+                    config += f'  validate_signature = {str(validate_signature).lower()}\n'
+                if jwks_url:
+                    config += f'  jwks_url          = "{jwks_url}"\n'
+                if default_scopes:
+                    config += f'  default_scopes    = "{default_scopes}"\n'
+            elif provider_id == 'saml':
+                # TODO: Implémenter la génération pour SAML providers
+                self.log_debug(f"Identity provider '{alias}' (type: {provider_id}) - génération SAML non implémentée")
+                continue
+            else:
+                # Provider non supporté
+                self.log_debug(f"Identity provider '{alias}' (type: {provider_id}) - type non supporté")
+                continue
             
             # Fonction helper pour générer la référence Terraform d'un flow
             def get_flow_reference(flow_alias, flow_name):
@@ -990,13 +1029,129 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
             if post_broker_flow_ref:
                 config += f'  post_broker_login_flow_alias = {post_broker_flow_ref}\n'
             
-            # Ajouter access_type via extra_config
-            config += '\n  # Configuration supplémentaire\n'
-            config += '  extra_config = {\n'
-            config += '    "access_type" = "PUBLIC"\n'
-            config += '  }\n'
+            # Ajouter tous les autres attributs via extra_config
+            extra_config_items = []
+            # Copier tous les attributs de config_data sauf ceux déjà gérés
+            handled_config_keys = ['authorizationUrl', 'tokenUrl', 'logoutUrl', 'clientId', 'clientSecret', 
+                                  'defaultScope', 'userInfoUrl', 'issuer', 'jwksUrl', 'syncMode', 
+                                  'backchannelSupported', 'validateSignature']
+            
+            for key, value in config_data.items():
+                if key not in handled_config_keys and value:
+                    # Échapper correctement les valeurs
+                    if isinstance(value, str):
+                        escaped_value = value.replace('\\', '\\\\').replace('"', '\\"')
+                        extra_config_items.append(f'    "{key}" = "{escaped_value}"\n')
+                    elif isinstance(value, bool):
+                        extra_config_items.append(f'    "{key}" = "{str(value).lower()}"\n')
+                    else:
+                        extra_config_items.append(f'    "{key}" = "{value}"\n')
+            
+            # Ajouter access_type si présent ou utiliser PUBLIC par défaut
+            if 'accessType' in config_data:
+                access_type = config_data.get('accessType', 'PUBLIC')
+                extra_config_items.append(f'    "access_type" = "{access_type}"\n')
+            elif extra_config_items or not config_data.get('accessType'):
+                # Ajouter access_type par défaut seulement si on n'a pas déjà un accessType dans config
+                extra_config_items.append('    "access_type" = "PUBLIC"\n')
+            
+            if extra_config_items:
+                config += '\n  # Configuration supplémentaire\n'
+                config += '  extra_config = {\n'
+                config += ''.join(extra_config_items)
+                config += '  }\n'
             
             config += "}\n"
+        
+        return config
+
+    def generate_identity_provider_mappers_config(self) -> str:
+        """Génère la configuration des mappers des fournisseurs d'identité"""
+        if not self.realm_data or 'identityProviderMappers' not in self.realm_data:
+            return ""
+        
+        config = ""
+        mappers = self.realm_data['identityProviderMappers']
+        
+        for mapper in mappers:
+            name = mapper.get('name', '')
+            identity_provider_alias = mapper.get('identityProviderAlias', '')
+            mapper_id = mapper.get('identityProviderMapper', '')
+            mapper_config = mapper.get('config', {})
+            
+            # S'assurer que le nom et l'alias du provider ne sont pas vides
+            if not name or name.strip() == '':
+                continue
+            if not identity_provider_alias or identity_provider_alias.strip() == '':
+                continue
+            
+            # Nettoyer le nom pour le nom de ressource
+            mapper_resource_name = self.clean_resource_name(f"{identity_provider_alias}_{name}")
+            
+            # Déterminer le type de mapper selon mapper_id
+            if mapper_id == 'oidc-user-attribute-idp-mapper' or mapper_id == 'saml-user-attribute-idp-mapper':
+                # Attribute importer mapper
+                claim_name = mapper_config.get('claim', mapper_config.get('attribute.name', ''))
+                user_attribute = mapper_config.get('user.attribute', '')
+                sync_mode = mapper_config.get('syncMode', 'INHERIT')
+                
+                if claim_name and user_attribute:
+                    config += f'''
+resource "keycloak_attribute_importer_identity_provider_mapper" "{mapper_resource_name}" {{
+  realm                   = keycloak_realm.{self.get_realm_resource_name()}.id
+  name                    = "{name}"
+  claim_name              = "{claim_name}"
+  identity_provider_alias = keycloak_oidc_identity_provider.{identity_provider_alias}.alias
+  user_attribute          = "{user_attribute}"
+  extra_config = {{
+    syncMode = "{sync_mode}"
+  }}
+}}
+'''
+            elif mapper_id == 'oidc-username-idp-mapper' or mapper_id == 'saml-username-idp-mapper':
+                # User template importer mapper
+                template = mapper_config.get('template', '')
+                sync_mode = mapper_config.get('syncMode', 'INHERIT')
+                
+                if template:
+                    # Échapper les $ dans le template pour Terraform
+                    escaped_template = template.replace('$', '$$')
+                    config += f'''
+resource "keycloak_user_template_importer_identity_provider_mapper" "{mapper_resource_name}" {{
+  realm                   = keycloak_realm.{self.get_realm_resource_name()}.id
+  name                    = "{name}"
+  identity_provider_alias = keycloak_oidc_identity_provider.{identity_provider_alias}.alias
+  template                = "{escaped_template}"
+  extra_config = {{
+    syncMode = "{sync_mode}"
+  }}
+}}
+'''
+            elif mapper_id == 'oidc-hardcoded-attribute-idp-mapper' or mapper_id == 'saml-hardcoded-attribute-idp-mapper':
+                # Hardcoded attribute mapper
+                attribute_name = mapper_config.get('attribute.name', mapper_config.get('attribute', ''))
+                attribute_value = mapper_config.get('attribute.value', '')
+                user_session = mapper_config.get('user.session.note', 'false').lower() == 'true'
+                sync_mode = mapper_config.get('syncMode', 'INHERIT')
+                
+                if attribute_name and attribute_value:
+                    config += f'''
+resource "keycloak_hardcoded_attribute_identity_provider_mapper" "{mapper_resource_name}" {{
+  realm                   = keycloak_realm.{self.get_realm_resource_name()}.id
+  name                    = "{name}"
+  identity_provider_alias = keycloak_oidc_identity_provider.{identity_provider_alias}.alias
+  attribute_name          = "{attribute_name}"
+  attribute_value         = "{attribute_value}"
+  user_session            = {str(user_session).lower()}
+  extra_config = {{
+    syncMode = "{sync_mode}"
+  }}
+}}
+'''
+            else:
+                # Mapper non supporté ou type inconnu
+                self.log_debug(f"Mapper '{name}' de type '{mapper_id}' non supporté ou non reconnu")
+                continue
         
         return config
 
@@ -1364,6 +1519,9 @@ resource "keycloak_authentication_execution_config" "{resource_name}" {{
         # Fournisseurs d'identité
         idps_config = self.generate_identity_providers_config()
         
+        # Mappers des fournisseurs d'identité
+        idp_mappers_config = self.generate_identity_provider_mappers_config()
+        
         # Scopes de clients
         client_scopes_config = self.generate_client_scopes_config()
         
@@ -1401,6 +1559,9 @@ resource "keycloak_authentication_execution_config" "{resource_name}" {{
         with open(f"{self.output_dir}/identity_providers.tf", "w", encoding="utf-8") as f:
             f.write(self.replace_variables(idps_config))
         
+        with open(f"{self.output_dir}/identity_provider_mappers.tf", "w", encoding="utf-8") as f:
+            f.write(self.replace_variables(idp_mappers_config))
+        
         with open(f"{self.output_dir}/client_scopes.tf", "w", encoding="utf-8") as f:
             f.write(self.replace_variables(client_scopes_config))
         
@@ -1425,6 +1586,7 @@ resource "keycloak_authentication_execution_config" "{resource_name}" {{
         print("   - groups.tf")
         print("   - users.tf")
         print("   - identity_providers.tf")
+        print("   - identity_provider_mappers.tf")
         print("   - client_scopes.tf")
         print("   - authentication_flows.tf")
         print("   - authentication_executions.tf")
