@@ -936,8 +936,9 @@ resource "keycloak_user" "{resource_name}" {{
             client_secret = config_data.get('clientSecret', '')
             default_scopes = config_data.get('defaultScope', 'openid')
             
-            # Récupérer le flow de first broker login si disponible
+            # Récupérer les flows de broker login si disponibles
             first_broker_login_flow_alias = idp.get('firstBrokerLoginFlowAlias', '')
+            post_broker_login_flow_alias = idp.get('postBrokerLoginFlowAlias', '')
             
             config += f'''
 resource "keycloak_oidc_identity_provider" "{alias}" {{
@@ -957,23 +958,37 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
             if default_scopes:
                 config += f'  default_scopes    = "{default_scopes}"\n'
             
-            # Ajouter le lien vers le flow de first broker login si disponible
-            if first_broker_login_flow_alias:
+            # Fonction helper pour générer la référence Terraform d'un flow
+            def get_flow_reference(flow_alias, flow_name):
+                """Génère la référence Terraform appropriée pour un flow"""
+                if not flow_alias:
+                    return None
+                
                 # Vérifier si c'est un flow personnalisé (non builtin) pour utiliser une référence Terraform
-                if not self.is_auto_created_object(first_broker_login_flow_alias, 'flow') and first_broker_login_flow_alias in flow_resource_mapping:
+                if not self.is_auto_created_object(flow_alias, 'flow') and flow_alias in flow_resource_mapping:
                     # Flow personnalisé - déterminer le type (flow ou subflow)
-                    flow_resource_name = flow_resource_mapping[first_broker_login_flow_alias]
-                    flow_type = flow_type_mapping.get(first_broker_login_flow_alias, 'flow')
+                    flow_resource_name = flow_resource_mapping[flow_alias]
+                    flow_type = flow_type_mapping.get(flow_alias, 'flow')
                     
                     if flow_type == 'subflow':
                         # Utiliser keycloak_authentication_subflow pour les subflows
-                        config += f'  first_broker_login_flow_alias = keycloak_authentication_subflow.{flow_resource_name}.alias\n'
+                        return f'keycloak_authentication_subflow.{flow_resource_name}.alias'
                     else:
                         # Utiliser keycloak_authentication_flow pour les flows principaux
-                        config += f'  first_broker_login_flow_alias = keycloak_authentication_flow.{flow_resource_name}.alias\n'
+                        return f'keycloak_authentication_flow.{flow_resource_name}.alias'
                 else:
                     # Flow builtin - utiliser l'alias en dur
-                    config += f'  first_broker_login_flow_alias = "{first_broker_login_flow_alias}"\n'
+                    return f'"{flow_alias}"'
+            
+            # Ajouter le lien vers le flow de first broker login si disponible
+            first_broker_flow_ref = get_flow_reference(first_broker_login_flow_alias, 'first_broker_login_flow_alias')
+            if first_broker_flow_ref:
+                config += f'  first_broker_login_flow_alias = {first_broker_flow_ref}\n'
+            
+            # Ajouter le lien vers le flow de post broker login si disponible
+            post_broker_flow_ref = get_flow_reference(post_broker_login_flow_alias, 'post_broker_login_flow_alias')
+            if post_broker_flow_ref:
+                config += f'  post_broker_login_flow_alias = {post_broker_flow_ref}\n'
             
             # Ajouter access_type via extra_config
             config += '\n  # Configuration supplémentaire\n'
