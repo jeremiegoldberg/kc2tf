@@ -900,6 +900,20 @@ resource "keycloak_user" "{resource_name}" {{
         config = ""
         idps = self.realm_data['identityProviders']
         
+        # Créer un mapping des flows pour trouver les références Terraform (une seule fois)
+        flow_resource_mapping = {}
+        flow_type_mapping = {}  # Pour savoir si c'est un flow ou un subflow
+        
+        if 'authenticationFlows' in self.realm_data:
+            for flow in self.realm_data['authenticationFlows']:
+                flow_alias = flow.get('alias', '')
+                if flow_alias and flow_alias.strip() and not self.is_auto_created_object(flow_alias, 'flow'):
+                    resource_name = self.clean_resource_name(flow_alias)
+                    flow_resource_mapping[flow_alias] = resource_name
+                    # Déterminer le type : flow principal ou subflow
+                    top_level = flow.get('topLevel', True)
+                    flow_type_mapping[flow_alias] = 'flow' if top_level else 'subflow'
+        
         for idp in idps:
             alias = idp.get('alias', '')
             provider_id = idp.get('providerId', '')
@@ -925,15 +939,6 @@ resource "keycloak_user" "{resource_name}" {{
             # Récupérer le flow de first broker login si disponible
             first_broker_login_flow_alias = idp.get('firstBrokerLoginFlowAlias', '')
             
-            # Créer un mapping des flows pour trouver les références Terraform
-            flow_resource_mapping = {}
-            if 'authenticationFlows' in self.realm_data:
-                for flow in self.realm_data['authenticationFlows']:
-                    flow_alias = flow.get('alias', '')
-                    if flow_alias and flow_alias.strip() and not self.is_auto_created_object(flow_alias, 'flow'):
-                        resource_name = self.clean_resource_name(flow_alias)
-                        flow_resource_mapping[flow_alias] = resource_name
-            
             config += f'''
 resource "keycloak_oidc_identity_provider" "{alias}" {{
         realm             = keycloak_realm.{self.get_realm_resource_name()}.id
@@ -956,9 +961,16 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
             if first_broker_login_flow_alias:
                 # Vérifier si c'est un flow personnalisé (non builtin) pour utiliser une référence Terraform
                 if not self.is_auto_created_object(first_broker_login_flow_alias, 'flow') and first_broker_login_flow_alias in flow_resource_mapping:
-                    # Flow personnalisé - utiliser la référence Terraform
+                    # Flow personnalisé - déterminer le type (flow ou subflow)
                     flow_resource_name = flow_resource_mapping[first_broker_login_flow_alias]
-                    config += f'  first_broker_login_flow_alias = keycloak_authentication_flow.{flow_resource_name}.alias\n'
+                    flow_type = flow_type_mapping.get(first_broker_login_flow_alias, 'flow')
+                    
+                    if flow_type == 'subflow':
+                        # Utiliser keycloak_authentication_subflow pour les subflows
+                        config += f'  first_broker_login_flow_alias = keycloak_authentication_subflow.{flow_resource_name}.alias\n'
+                    else:
+                        # Utiliser keycloak_authentication_flow pour les flows principaux
+                        config += f'  first_broker_login_flow_alias = keycloak_authentication_flow.{flow_resource_name}.alias\n'
                 else:
                     # Flow builtin - utiliser l'alias en dur
                     config += f'  first_broker_login_flow_alias = "{first_broker_login_flow_alias}"\n'
