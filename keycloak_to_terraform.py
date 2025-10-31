@@ -1029,13 +1029,29 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
             if post_broker_flow_ref:
                 config += f'  post_broker_login_flow_alias = {post_broker_flow_ref}\n'
             
-            # Ajouter tous les autres attributs via extra_config
+            # Ajouter tous les autres attributs via extra_config (ceux qui ne sont pas top-level)
             extra_config_items = []
-            # Copier tous les attributs de config_data sauf ceux déjà gérés
-            handled_config_keys = ['authorizationUrl', 'tokenUrl', 'logoutUrl', 'clientId', 'clientSecret', 
-                                  'defaultScope', 'userInfoUrl', 'issuer', 'jwksUrl', 'syncMode', 
-                                  'backchannelSupported', 'validateSignature']
+            # Liste complète des attributs gérés au niveau top-level (ne doivent PAS être dans extra_config)
+            # Ces attributs sont déjà gérés comme attributs top-level de la ressource Terraform
+            handled_config_keys = [
+                'authorizationUrl',    # -> authorization_url (top-level)
+                'tokenUrl',            # -> token_url (top-level)
+                'logoutUrl',           # -> logout_url (top-level)
+                'clientId',            # -> client_id (top-level)
+                'clientSecret',        # -> client_secret (top-level)
+                'defaultScope',        # -> default_scopes (top-level)
+                'userInfoUrl',         # -> user_info_url (top-level)
+                'issuer',              # -> issuer (top-level)
+                'jwksUrl',             # -> jwks_url (top-level)
+                'syncMode',            # -> sync_mode (top-level)
+                'backchannelSupported', # -> backchannel_supported (top-level)
+                'validateSignature',   # -> validate_signature (top-level)
+                # Note: store_token, trust_email, hide_on_login_page sont des attributs IDP directs (pas dans config)
+                # Note: first_broker_login_flow_alias et post_broker_login_flow_alias sont top-level (pas dans config)
+            ]
             
+            # Ajouter uniquement les attributs qui ne sont pas déjà gérés au niveau top-level
+            # Ces attributs iront dans extra_config car ils ne sont pas supportés comme attributs top-level
             for key, value in config_data.items():
                 if key not in handled_config_keys and value:
                     # Échapper correctement les valeurs
@@ -1047,13 +1063,9 @@ resource "keycloak_oidc_identity_provider" "{alias}" {{
                     else:
                         extra_config_items.append(f'    "{key}" = "{value}"\n')
             
-            # Ajouter access_type si présent ou utiliser PUBLIC par défaut
-            if 'accessType' in config_data:
-                access_type = config_data.get('accessType', 'PUBLIC')
-                extra_config_items.append(f'    "access_type" = "{access_type}"\n')
-            elif extra_config_items or not config_data.get('accessType'):
-                # Ajouter access_type par défaut seulement si on n'a pas déjà un accessType dans config
-                extra_config_items.append('    "access_type" = "PUBLIC"\n')
+            # Ne PAS ajouter access_type automatiquement
+            # Si access_type est présent dans config_data, il sera ajouté dans la boucle ci-dessus
+            # Sinon, le provider Terraform utilisera sa valeur par défaut
             
             if extra_config_items:
                 config += '\n  # Configuration supplémentaire\n'
